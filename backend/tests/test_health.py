@@ -342,8 +342,8 @@ def test_worker_does_not_complete_if_pipeline_does_not_confirm_private_upload(mo
 def test_image_provider_identifies_actual_image_format_and_sharing_mode(monkeypatch):
     from app.image_provider import _image_extension, _headers, _is_anonymous
 
-    assert _image_extension("image/png", b"\\x89PNG\\r\\n\\x1a\\n" + b"x" * 20) == ".png"
-    assert _image_extension("image/jpeg", b"\\xff\\xd8\\xff" + b"x" * 20) == ".jpg"
+    assert _image_extension("image/png", b"\x89PNG\r\n\x1a\n" + b"x" * 20) == ".png"
+    assert _image_extension("image/jpeg", b"\xff\xd8\xff" + b"x" * 20) == ".jpg"
     assert _image_extension("image/webp", b"RIFF" + b"xxxx" + b"WEBP" + b"x" * 20) == ".webp"
     with pytest.raises(RuntimeError, match="unsupported or invalid image"):
         _image_extension("image/png", b"not actually an image")
