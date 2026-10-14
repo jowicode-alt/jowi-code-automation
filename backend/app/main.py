@@ -59,7 +59,7 @@ def get_jobs() -> dict[str, list[dict[str, str]]]:
     return {"jobs": list_jobs()}
 
 @app.get("/api/jobs/{job_id}", dependencies=[Depends(require_api_token)])
-def get_job_detail(job_id: str) -> dict[str, str]:
+def get_job_detail(job_id: str) -> dict:
     try:
         safe_id = str(uuid.UUID(job_id))
     except ValueError as exc:
