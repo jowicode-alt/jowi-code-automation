@@ -1,0 +1,64 @@
+name: Process one private draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_private_upload:
+        description: "Type PRIVATE to allow one queued job to be uploaded privately to YouTube"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jowi-private-worker
+  cancel-in-progress: false
+
+jobs:
+  process-one:
+    if: ${{ inputs.confirm_private_upload == 'PRIVATE' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: ${{ secrets.JOWI_DATABASE_URL }}
+      AI_HORDE_API_KEY: ${{ secrets.AI_HORDE_API_KEY }}
+      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      TTS_VOICE: en-US-GuyNeural
+      TTS_RATE: -5%
+      TTS_PITCH: -8Hz
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets before processing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in DATABASE_URL YOUTUBE_CLIENT_ID YOUTUBE_CLIENT_SECRET YOUTUBE_REFRESH_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required repository secret for ${name} is missing. No job was processed."
+              exit 1
+            fi
+          done
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install FFmpeg and Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          python -m pip install -r requirements.txt
+
+      - name: Process at most one queued job
+        run: python -m app.worker
