@@ -5,8 +5,9 @@ Items marked complete have been implemented or verified; they do not imply that 
 ## Repository and CI
 - [x] Separate repository exists.
 - [x] No per-run workflow artifact uploads; no APK build workflow is configured.
-- [x] Checks-only workflow runs pytest; latest recorded backend test run passed.
-- [x] Verify latest CI run after the current backend test fixes (run #72 passed).
+- [x] Checks-only workflow runs pytest and does not upload artifacts.
+- [x] Latest verified CI run #81 passed (26 tests); see https://github.com/jowicode-alt/jowi-code-automation/actions/runs/38636572145.
+- [x] Image signature validation, anonymous-versus-registered sharing mode, worker planning failure handling, and partial AI Horde submission cleanup have regression tests.
 
 ## Backend
 - [x] Public liveness endpoint.
@@ -47,7 +48,7 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [ ] Build one release APK only after backend and end-to-end readiness checks pass.
 
 ## Release gate
-- [x] Latest recorded CI run #72 is green; rerun after subsequent changes.
+- [x] Latest recorded CI run #81 is green; new commits trigger checks-only CI.
 - [ ] No secrets in repository or logs.
 - [ ] No unapproved public upload possible.
 - [ ] No per-workflow artifacts.
