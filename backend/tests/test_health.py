@@ -416,7 +416,7 @@ def test_image_provider_cancels_successful_submissions_when_another_submit_fails
     with pytest.raises(RuntimeError, match="simulated submission failure"):
         asyncio.run(
             provider.generate_scene_images(
-                ["good-one", "bad-prompt", "good-two"], str(tmp_path), timeout_seconds=1
+                ["good-one", "bad-prompt", "good-two", "good-three"], str(tmp_path), timeout_seconds=1
             )
         )
-    assert set(cancelled) == {"accepted-good-one", "accepted-good-two"}
+    assert set(cancelled) == {"accepted-good-one", "accepted-good-two", "accepted-good-three"}
