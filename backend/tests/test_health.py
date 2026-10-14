@@ -1,10 +1,12 @@
 from fastapi.testclient import TestClient
+import asyncio
 import pytest
 from pathlib import Path
 
 from app.main import app
 from app.render import render_short
 from app.youtube import upload_video_private
+from app.pipeline import build_private_draft
 
 client = TestClient(app)
 TEST_TOKEN = "test-token-for-tests-only"
@@ -119,3 +121,38 @@ def test_youtube_upload_fails_closed_without_oauth(monkeypatch, tmp_path):
 def test_renderer_requires_four_scene_images():
     with pytest.raises(ValueError, match="exactly four"):
         render_short([], "voice.mp3", "out.mp4")
+
+
+def test_pipeline_requires_four_existing_scene_images(tmp_path):
+    with pytest.raises(ValueError, match="Four existing scene images"):
+        asyncio.run(build_private_draft("Discipline", [], str(tmp_path)))
+
+
+def test_pipeline_creates_private_draft_and_cleans_temporary_media(monkeypatch, tmp_path):
+    import app.pipeline as pipeline
+    images = []
+    for index in range(4):
+        path = tmp_path / f"scene-{index}.png"
+        path.write_bytes(b"fake-image")
+        images.append(str(path))
+
+    async def fake_voice(text, output_path):
+        Path(output_path).write_bytes(b"fake-audio")
+
+    def fake_render(scene_images, audio_path, output_path):
+        Path(output_path).write_bytes(b"fake-video")
+        return output_path
+
+    def fake_upload(file_path, title, description, tags):
+        assert Path(file_path).is_file()
+        assert "Master Your Mind. Build Your Future." in description
+        return {"video_id": "private-test-id", "privacy_status": "private"}
+
+    monkeypatch.setattr(pipeline, "generate_voiceover", fake_voice)
+    monkeypatch.setattr(pipeline, "render_short", fake_render)
+    monkeypatch.setattr(pipeline, "upload_video_private", fake_upload)
+    output_dir = tmp_path / "output"
+    result = asyncio.run(build_private_draft("Discipline", images, str(output_dir)))
+    assert result["video_id"] == "private-test-id"
+    assert result["privacy_status"] == "private"
+    assert list(output_dir.iterdir()) == []
