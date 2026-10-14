@@ -3,7 +3,7 @@
 PostgreSQL is used when DATABASE_URL is configured; SQLite is for local development.
 """
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -144,7 +144,7 @@ def claim_next_job() -> dict | None:
     Conditional updates prevent two workers from claiming the same row.
     """
     with _database() as (db, is_postgres):
-        stale_before = (datetime.now(timezone.utc) - __import__("datetime").timedelta(minutes=45)).isoformat()
+        stale_before = (datetime.now(timezone.utc) - timedelta(minutes=45)).isoformat()
         db.execute(
             _query(
                 "UPDATE jobs SET status = ?, updated_at_utc = ?, error = ? "
