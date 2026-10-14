@@ -1,6 +1,6 @@
 # Readiness checklist
 
-Items marked complete have been implemented or verified; they do not imply that the whole system is production-ready.
+Items marked complete have been implemented or verified; they do not imply that the whole system is production-ready. Current status endpoint reports media dependency availability, PostgreSQL connectivity/durability, image provider mode, and YouTube OAuth presence separately. No secrets are returned.
 
 ## Repository and CI
 - [x] Separate repository exists.
@@ -27,10 +27,10 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] YouTube upload adapter restricted to private uploads.
 - [x] One-shot worker implemented and covered by mocked tests.
 - [x] Manual worker workflow fails before processing if its required database or YouTube OAuth secrets are missing.
-- [ ] Configure and verify a durable free-tier database.
+- [ ] Configure and verify a durable free-tier database. The live status endpoint now tests PostgreSQL connectivity with SELECT 1 and reports SQLite as ephemeral when DATABASE_URL is absent.
 - [x] Render blueprint aligned with active backend variables; auto-deploy remains disabled.
 - [x] Render account inspection found no Jowi Code service or database; existing services and database belong to the separate Forex project and are not reused.
-- [ ] Deploy to a free-tier host and verify sleep/restart/resource limitations.
+- [x] Deploy to Render free tier and verify the public health endpoint; free-tier sleep/resource limitations still apply.
 - [ ] Configure an automatic schedule only after durable storage, real-media generation, and private-upload tests pass.
 
 ### Manual worker setup (not yet configured)
@@ -45,8 +45,8 @@ The workflow is deliberately not scheduled and cannot create a working queue by 
 - [x] Deep male voiceover adapter with configurable voice/rate/pitch; online service availability is not guaranteed.
 - [x] Four-scene brand prompt planner and FFmpeg assembly function for 9:16 output.
 - [x] Optional AI Horde volunteer-powered image provider adapter implemented; free availability/latency is not guaranteed.
-- [ ] Live-generate and review four scene assets; character consistency is not yet guaranteed.
-- [ ] Test full render quality, audio sync, duration, file size, and cleanup on the deployed host.
+- [ ] Live-generate and review four scene assets; character consistency is not yet guaranteed. Anonymous AI Horde is shared/low-priority and can fail or time out.
+- [ ] Test full render quality, audio sync, duration, file size, and cleanup on the deployed host. Status now separately reports FFmpeg/ffprobe and Edge TTS dependency availability; this does not prove a successful real-media run.
 
 ## YouTube
 - [x] Upload adapter restricted to private uploads.
