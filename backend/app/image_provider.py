@@ -87,10 +87,29 @@ async def generate_scene_images(
                 raise RuntimeError("AI Horde did not return a generation ID")
             return index, str(request_id)
 
-        submitted = await asyncio.gather(
-            *(submit(index, prompt) for index, prompt in enumerate(prompts, start=1))
+        submission_results = await asyncio.gather(
+            *(submit(index, prompt) for index, prompt in enumerate(prompts, start=1)),
+            return_exceptions=True,
         )
+        submitted = [result for result in submission_results if not isinstance(result, BaseException)]
+        submission_errors = [
+            result for result in submission_results if isinstance(result, BaseException)
+        ]
         pending = dict(submitted)
+        if submission_errors:
+            # Some requests may have been accepted even if another submission failed.
+            # Cancel every accepted request before surfacing the original error.
+            await asyncio.gather(
+                *(
+                    client.post(
+                        f"{BASE_URL}/v2/generate/soft_cancel/{request_id}",
+                        headers=headers,
+                    )
+                    for request_id in pending.values()
+                ),
+                return_exceptions=True,
+            )
+            raise submission_errors[0]
         image_urls: dict[int, str] = {}
         try:
             while pending:
