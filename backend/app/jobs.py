@@ -135,6 +135,37 @@ def get_job(job_id: str) -> dict | None:
     return job
 
 
+
+def claim_next_job() -> dict | None:
+    """Atomically claim the oldest queued job; suitable for a single worker process.
+
+    The conditional update prevents two workers from both claiming the same row.
+    A deployment should still run only one worker until concurrency is load-tested.
+    """
+    with _database() as (db, is_postgres):
+        row = db.execute(
+            _query(
+                "SELECT id FROM jobs WHERE status = ? ORDER BY created_at_utc ASC LIMIT 1",
+                is_postgres,
+            ),
+            ("queued",),
+        ).fetchone()
+        if row is None:
+            return None
+        job_id = row[0]
+        cursor = db.execute(
+            _query(
+                "UPDATE jobs SET status = ?, updated_at_utc = ?, error = NULL "
+                "WHERE id = ? AND status = ?",
+                is_postgres,
+            ),
+            ("running", _now(), job_id, "queued"),
+        )
+        if cursor.rowcount != 1:
+            return None
+    return get_job(job_id)
+
+
 def update_job_status(job_id: str, status: str, *, error: str | None = None, result: dict | None = None) -> dict | None:
     """Apply a valid lifecycle transition and return the updated job."""
     with _database() as (db, is_postgres):
