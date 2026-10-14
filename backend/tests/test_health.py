@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 import pytest
+from pathlib import Path
 
 from app.main import app
 from app.render import render_short
@@ -81,6 +82,30 @@ def test_script_planner_returns_brand_consistent_vertical_scenes(monkeypatch):
 def test_script_planner_requires_authentication(monkeypatch):
     monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
     assert client.post("/api/scripts/plan", json={"topic": "Discipline"}).status_code == 401
+
+
+def test_voiceover_requires_authentication(monkeypatch):
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
+    assert client.post("/api/voiceover", json={"text": "Stay focused."}).status_code == 401
+    assert client.get("/api/voiceover/not-a-uuid", headers=HEADERS).status_code == 404
+
+
+def test_voiceover_generation_and_download(monkeypatch, tmp_path):
+    import app.main as main_module
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
+    monkeypatch.setattr(main_module, "OUTPUT_DIR", tmp_path)
+
+    async def fake_voiceover(text, output_path):
+        Path(output_path).write_bytes(b"test-audio")
+        return output_path
+
+    monkeypatch.setattr(main_module, "generate_voiceover", fake_voiceover)
+    created = client.post("/api/voiceover", json={"text": "Stay focused."}, headers=HEADERS)
+    assert created.status_code == 200
+    audio_id = created.json()["audio_id"]
+    downloaded = client.get(f"/api/voiceover/{audio_id}", headers=HEADERS)
+    assert downloaded.status_code == 200
+    assert downloaded.content == b"test-audio"
 
 
 def test_youtube_upload_fails_closed_without_oauth(monkeypatch, tmp_path):
