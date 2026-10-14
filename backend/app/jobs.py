@@ -137,12 +137,26 @@ def get_job(job_id: str) -> dict | None:
 
 
 def claim_next_job() -> dict | None:
-    """Atomically claim the oldest queued job; suitable for a single worker process.
+    """Claim one queued job, recovering jobs abandoned by a crashed worker.
 
-    The conditional update prevents two workers from both claiming the same row.
-    A deployment should still run only one worker until concurrency is load-tested.
+    Jobs running for over 45 minutes are re-queued before a new claim. This exceeds
+    the current 20-minute worker workflow timeout and avoids permanently stuck jobs.
+    Conditional updates prevent two workers from claiming the same row.
     """
     with _database() as (db, is_postgres):
+        stale_before = (datetime.now(timezone.utc) - __import__("datetime").timedelta(minutes=45)).isoformat()
+        db.execute(
+            _query(
+                "UPDATE jobs SET status = ?, updated_at_utc = ?, error = ? "
+                "WHERE status = ? AND updated_at_utc IS NOT NULL AND updated_at_utc < ?",
+                is_postgres,
+            ),
+            (
+                "queued", _now(),
+                "Automatically re-queued after a worker stopped responding for over 45 minutes.",
+                "running", stale_before,
+            ),
+        )
         row = db.execute(
             _query(
                 "SELECT id FROM jobs WHERE status = ? ORDER BY created_at_utc ASC LIMIT 1",
