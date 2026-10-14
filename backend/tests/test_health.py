@@ -224,3 +224,45 @@ def test_existing_sqlite_queue_schema_is_migrated(monkeypatch, tmp_path):
     assert job["updated_at_utc"] is None
     assert job["error"] is None
     assert job["result"] is None
+
+
+def test_worker_claims_job_and_blocks_honestly_without_image_provider(monkeypatch, tmp_path):
+    from app.jobs import get_job
+    from app.worker import run_once, BLOCKED_REASON
+
+    monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "worker.sqlite3"))
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
+    created = client.post(
+        "/api/jobs", json={"topic": "Build discipline"}, headers=HEADERS
+    ).json()
+
+    result = run_once()
+    assert result["state"] == "blocked"
+    assert result["job_id"] == created["id"]
+    job = get_job(created["id"])
+    assert job["status"] == "blocked"
+    assert BLOCKED_REASON in job["error"]
+    assert job["result"]["media_created"] is False
+    assert job["result"]["youtube_upload"] is None
+    assert len(job["result"]["plan"]["scenes"]) == 4
+
+
+def test_worker_returns_idle_when_queue_is_empty(monkeypatch, tmp_path):
+    from app.worker import run_once
+
+    monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "empty-worker.sqlite3"))
+    assert run_once() == {"state": "idle", "message": "No queued jobs."}
+
+
+def test_worker_processes_only_one_job_per_invocation(monkeypatch, tmp_path):
+    from app.jobs import get_job
+    from app.worker import run_once
+
+    monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "one-at-a-time.sqlite3"))
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
+    first = client.post("/api/jobs", json={"topic": "First topic"}, headers=HEADERS).json()
+    second = client.post("/api/jobs", json={"topic": "Second topic"}, headers=HEADERS).json()
+
+    assert run_once()["job_id"] == first["id"]
+    assert get_job(first["id"])["status"] == "blocked"
+    assert get_job(second["id"])["status"] == "queued"
