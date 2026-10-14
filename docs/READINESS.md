@@ -16,8 +16,9 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] Brand-safe script and scene-prompt planner.
 - [x] Voiceover generation endpoint and authenticated audio download.
 - [x] FFmpeg vertical MP4 renderer function.
+- [x] Pipeline function connects narration, rendering, and private-only YouTube upload; tested with mocked providers.
 - [x] YouTube upload adapter restricted to private uploads.
-- [ ] Add background worker to connect jobs to media pipeline, retry safely, and mark completed/failed states.
+- [ ] Add background worker to connect queued jobs to the media pipeline and update queued/running/completed/failed states.
 - [ ] Configure and verify a durable free-tier database; do not rely on ephemeral SQLite for hosted production.
 - [ ] Deploy to a free-tier host and verify sleep/restart/resource limitations.
 
@@ -41,12 +42,12 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [ ] Connect job progress and audio/video draft review.
 - [ ] Handle offline/network errors and expired credentials.
 - [ ] Build and test APK only after backend contract stabilizes.
-- [ ] Produce one release APK only after readiness gates pass.
+- [ ] Produce one release APK only after all readiness gates pass.
 
 ## Release gate
-- [ ] Latest CI green after final changes.
+- [ ] Latest CI green after final documentation changes.
 - [ ] No secrets in repository or logs.
 - [ ] No unapproved public upload possible.
 - [ ] No per-workflow artifacts.
-- [ ] End-to-end pipeline verified.
+- [ ] End-to-end pipeline verified against real media and YouTube services.
 - [ ] Owner approves live publishing.
