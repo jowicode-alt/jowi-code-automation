@@ -11,7 +11,7 @@ Items marked complete have been implemented or verified; they do not imply that 
 ## Backend
 - [x] Public liveness endpoint.
 - [x] Bearer-token authentication for protected endpoints; fails closed if token is absent.
-- [x] Bounded job enqueue/list API; maximum three jobs per UTC day.
+- [x] Bounded job enqueue/list/detail API; maximum three jobs per UTC day; detail endpoint is authenticated.
 - [x] PostgreSQL adapter for hosted queue state; SQLite is local-development fallback only.
 - [x] Brand-safe script and scene-prompt planner.
 - [x] Voiceover generation endpoint and authenticated audio download.
