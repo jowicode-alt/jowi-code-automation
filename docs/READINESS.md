@@ -24,6 +24,7 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] One-shot worker implemented and covered by mocked tests; [ ] deploy and schedule it (jobs are not processed automatically yet).
 - [ ] Configure and verify a durable free-tier database.
 - [x] Render blueprint aligned with active backend variables; auto-deploy remains disabled.
+- [x] Render account inspection found no Jowi Code service or database; existing services and database belong to the separate Forex project and are not reused.
 - [ ] Deploy to a free-tier host and verify sleep/restart/resource limitations.
 
 ## Video and voice
