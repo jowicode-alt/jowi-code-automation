@@ -1,6 +1,9 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from app.main import app
+from app.render import render_short
+from app.youtube import upload_video_private
 
 client = TestClient(app)
 TEST_TOKEN = "test-token-for-tests-only"
@@ -78,3 +81,16 @@ def test_script_planner_returns_brand_consistent_vertical_scenes(monkeypatch):
 def test_script_planner_requires_authentication(monkeypatch):
     monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
     assert client.post("/api/scripts/plan", json={"topic": "Discipline"}).status_code == 401
+
+
+def test_youtube_upload_fails_closed_without_oauth(monkeypatch, tmp_path):
+    monkeypatch.delenv("YOUTUBE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("YOUTUBE_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("YOUTUBE_REFRESH_TOKEN", raising=False)
+    with pytest.raises(RuntimeError, match="not configured"):
+        upload_video_private(str(tmp_path / "missing.mp4"), "Title", "Description")
+
+
+def test_renderer_requires_four_scene_images():
+    with pytest.raises(ValueError, match="exactly four"):
+        render_short([], "voice.mp3", "out.mp4")
