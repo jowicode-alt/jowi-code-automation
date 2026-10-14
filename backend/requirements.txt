@@ -4,3 +4,4 @@ pydantic-settings>=2.4,<3.0
 psycopg[binary]>=3.2,<4.0
 google-api-python-client>=2.150,<3.0
 google-auth>=2.35,<3.0
+edge-tts>=7.0,<8.0
