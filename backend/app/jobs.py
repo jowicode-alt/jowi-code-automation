@@ -74,3 +74,17 @@ def list_jobs(limit: int = 20) -> list[dict[str, str]]:
     if is_postgres:
         return [dict(zip(("id", "job_type", "topic", "status", "created_at_utc"), row)) for row in rows]
     return [dict(row) for row in rows]
+
+
+
+def get_job(job_id: str) -> dict[str, str] | None:
+    """Return one queued job by ID, or None when it does not exist."""
+    with _database() as (db, is_postgres):
+        row = db.execute(
+            _query("SELECT id, job_type, topic, status, created_at_utc FROM jobs WHERE id = ?", is_postgres),
+            (job_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    keys = ("id", "job_type", "topic", "status", "created_at_utc")
+    return dict(zip(keys, row)) if is_postgres else dict(row)
