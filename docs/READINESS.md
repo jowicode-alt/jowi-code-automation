@@ -6,8 +6,10 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] Separate repository exists.
 - [x] No per-run workflow artifact uploads; no APK build workflow is configured.
 - [x] Checks-only workflow runs pytest and does not upload artifacts.
-- [x] Latest verified CI run #83 passed (26 tests); see https://github.com/jowicode-alt/jowi-code-automation/actions/runs/38636815919.
+- [x] Latest verified CI run #85 passed; see https://github.com/jowicode-alt/jowi-code-automation/actions/runs/38637036727.
 - [x] Image signature validation, anonymous-versus-registered sharing mode, worker planning failure handling, and partial AI Horde submission cleanup have regression tests.
+- [x] Added a manual-only private worker workflow; it has no cron schedule, no artifact upload, and requires the operator to type PRIVATE before a single job can be processed.
+- [ ] Verify the new workflow's GitHub Actions syntax and behavior in a controlled run after required secrets and a queued test job exist.
 
 ## Backend
 - [x] Public liveness endpoint.
@@ -21,11 +23,21 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] FFmpeg vertical MP4 renderer function.
 - [x] Pipeline function connects narration, rendering, and private-only YouTube upload; tested with mocked providers.
 - [x] YouTube upload adapter restricted to private uploads.
-- [x] One-shot worker implemented and covered by mocked tests; [ ] deploy and schedule it (jobs are not processed automatically yet).
+- [x] One-shot worker implemented and covered by mocked tests.
+- [x] Manual worker workflow fails before processing if its required database or YouTube OAuth secrets are missing.
 - [ ] Configure and verify a durable free-tier database.
 - [x] Render blueprint aligned with active backend variables; auto-deploy remains disabled.
 - [x] Render account inspection found no Jowi Code service or database; existing services and database belong to the separate Forex project and are not reused.
 - [ ] Deploy to a free-tier host and verify sleep/restart/resource limitations.
+- [ ] Configure an automatic schedule only after durable storage, real-media generation, and private-upload tests pass.
+
+### Manual worker setup (not yet configured)
+The GitHub Actions workflow `.github/workflows/private-worker.yml` is manual-only. It processes at most one already-queued job and uploads only with YouTube privacy set to PRIVATE. Before use, configure repository Actions secrets:
+- `JOWI_DATABASE_URL`: a dedicated durable PostgreSQL connection string for this project (never the Forex database).
+- `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`: owner-approved YouTube OAuth credentials with upload scope.
+- `AI_HORDE_API_KEY`: optional; anonymous mode is slower/shared and image generation is not guaranteed.
+
+The workflow is deliberately not scheduled and cannot create a working queue by itself. A separate API deployment and a queued job are required. Do not store secrets in source files or commit them. It creates private drafts only; public publishing is not implemented.
 
 ## Video and voice
 - [x] Deep male voiceover adapter with configurable voice/rate/pitch; online service availability is not guaranteed.
@@ -50,7 +62,7 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [ ] Build one release APK only after backend and end-to-end readiness checks pass.
 
 ## Release gate
-- [x] Latest recorded CI run #83 is green; new commits trigger checks-only CI.
+- [x] Latest recorded CI run #85 is green; new commits trigger checks-only CI.
 - [ ] No secrets in repository or logs.
 - [ ] No unapproved public upload possible.
 - [ ] No per-workflow artifacts.
