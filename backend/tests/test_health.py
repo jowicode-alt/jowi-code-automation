@@ -170,3 +170,57 @@ def test_job_detail_requires_auth_and_returns_only_requested_job(monkeypatch, tm
     assert response.json()["status"] == "queued"
     assert client.get("/api/jobs/not-a-uuid", headers=HEADERS).status_code == 404
     assert client.get("/api/jobs/00000000-0000-0000-0000-000000000000", headers=HEADERS).status_code == 404
+
+
+
+def test_job_lifecycle_tracks_updated_time_and_rejects_invalid_transitions(monkeypatch, tmp_path):
+    from app.jobs import get_job, update_job_status
+
+    monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "jobs.sqlite3"))
+    created = client.post(
+        "/api/jobs", json={"topic": "Build discipline"}, headers=HEADERS
+    ).json()
+    job_id = created["id"]
+    initial = get_job(job_id)
+    assert initial["updated_at_utc"]
+    assert initial["error"] is None
+    assert initial["result"] is None
+
+    blocked = update_job_status(
+        job_id, "blocked", error="Image generation provider is not configured"
+    )
+    assert blocked["status"] == "blocked"
+    assert blocked["error"] == "Image generation provider is not configured"
+    assert blocked["updated_at_utc"]
+    assert blocked["result"] is None
+
+    with pytest.raises(ValueError, match="Invalid job status transition"):
+        update_job_status(job_id, "completed", result={"video_id": "fake"})
+    retried = update_job_status(job_id, "queued")
+    assert retried["status"] == "queued"
+    assert retried["error"] is None
+
+
+def test_existing_sqlite_queue_schema_is_migrated(monkeypatch, tmp_path):
+    import sqlite3
+    from app.jobs import get_job
+
+    db_path = tmp_path / "legacy.sqlite3"
+    connection = sqlite3.connect(db_path)
+    connection.execute(
+        "CREATE TABLE jobs (id TEXT PRIMARY KEY, job_type TEXT NOT NULL, "
+        "topic TEXT NOT NULL, status TEXT NOT NULL, created_at_utc TEXT NOT NULL)"
+    )
+    connection.execute(
+        "INSERT INTO jobs VALUES (?, ?, ?, ?, ?)",
+        ("00000000-0000-0000-0000-000000000001", "short_video", "Legacy job",
+         "queued", "2026-10-14T00:00:00+00:00"),
+    )
+    connection.commit()
+    connection.close()
+    monkeypatch.setenv("JOB_DB_PATH", str(db_path))
+    job = get_job("00000000-0000-0000-0000-000000000001")
+    assert job["status"] == "queued"
+    assert job["updated_at_utc"] is None
+    assert job["error"] is None
+    assert job["result"] is None
