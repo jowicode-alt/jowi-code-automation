@@ -172,10 +172,10 @@ private fun Dashboard() {
                                             val job = list.getJSONObject(i)
                                             buildString {
                                                 append("${job.optString("status").uppercase()} — ${job.optString("topic")}")
-                                                append("\\nUpdated: ${job.optString("updated_at_utc", "not recorded")}")
+                                                append("\nUpdated: ${job.optString("updated_at_utc", "not recorded")}")
                                                 val error = job.optString("error")
-                                                if (error.isNotBlank() && error != "null") append("\\nNote: $error")
-                                                append("\\nID: ${job.optString("id")}")
+                                                if (error.isNotBlank() && error != "null") append("\nNote: $error")
+                                                append("\nID: ${job.optString("id")}")
                                             }
                                         }
                                         jobsDetails = lines
