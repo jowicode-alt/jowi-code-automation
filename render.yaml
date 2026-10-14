@@ -1,11 +1,10 @@
 services:
   - type: web
     name: jowi-code-automation
-    runtime: python
+    runtime: docker
     plan: free
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     autoDeploy: false
     envVars:
@@ -21,3 +20,9 @@ services:
         sync: false
       - key: YOUTUBE_REFRESH_TOKEN
         sync: false
+      - key: TTS_VOICE
+        value: en-US-GuyNeural
+      - key: TTS_RATE
+        value: -5%
+      - key: TTS_PITCH
+        value: -8Hz
