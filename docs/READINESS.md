@@ -12,13 +12,15 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] Public liveness endpoint.
 - [x] Bearer-token authentication for protected endpoints; fails closed if token is absent.
 - [x] Bounded job enqueue/list/detail API; maximum three jobs per UTC day; detail endpoint is authenticated.
+- [x] Job lifecycle schema tracks status, last update, error, and JSON result; legacy SQLite queues are migrated on access.
+- [x] Lifecycle transitions are validated; blocked/failed jobs can be explicitly re-queued.
 - [x] PostgreSQL adapter for hosted queue state; SQLite is local-development fallback only.
 - [x] Brand-safe script and scene-prompt planner.
 - [x] Voiceover generation endpoint and authenticated audio download.
 - [x] FFmpeg vertical MP4 renderer function.
 - [x] Pipeline function connects narration, rendering, and private-only YouTube upload; tested with mocked providers.
 - [x] YouTube upload adapter restricted to private uploads.
-- [ ] Add worker to process queued jobs and track queued/running/completed/failed states.
+- [ ] Add and deploy a single worker process to consume queued jobs; lifecycle storage is ready but jobs are not processed automatically yet.
 - [ ] Configure and verify a durable free-tier database.
 - [ ] Deploy to a free-tier host and verify sleep/restart/resource limitations.
 
