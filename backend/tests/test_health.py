@@ -338,3 +338,41 @@ def test_worker_does_not_complete_if_pipeline_does_not_confirm_private_upload(mo
     assert result["state"] == "failed"
     assert job["status"] == "failed"
     assert "did not confirm a private YouTube upload" in job["error"]
+
+def test_image_provider_identifies_actual_image_format_and_sharing_mode(monkeypatch):
+    from app.image_provider import _image_extension, _headers, _is_anonymous
+
+    assert _image_extension("image/png", b"\\x89PNG\\r\\n\\x1a\\n" + b"x" * 20) == ".png"
+    assert _image_extension("image/jpeg", b"\\xff\\xd8\\xff" + b"x" * 20) == ".jpg"
+    assert _image_extension("image/webp", b"RIFF" + b"xxxx" + b"WEBP" + b"x" * 20) == ".webp"
+    with pytest.raises(RuntimeError, match="unsupported or invalid image"):
+        _image_extension("image/png", b"not actually an image")
+
+    monkeypatch.delenv("AI_HORDE_API_KEY", raising=False)
+    anonymous_headers = _headers()
+    assert _is_anonymous(anonymous_headers) is True
+    monkeypatch.setenv("AI_HORDE_API_KEY", "registered-test-key")
+    assert _is_anonymous(_headers()) is False
+
+
+def test_worker_marks_invalid_topic_failed_instead_of_leaving_job_running(monkeypatch, tmp_path):
+    import app.worker as worker
+    from app.jobs import get_job
+
+    monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "worker-plan-error.sqlite3"))
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
+    created = client.post("/api/jobs", json={"topic": "A topic"}, headers=HEADERS)
+    assert created.status_code == 202
+    job_id = created.json()["id"]
+
+    def fail_plan(_topic):
+        raise ValueError("planned failure for test")
+
+    monkeypatch.setattr(worker, "build_short_plan", fail_plan)
+    result = worker.run_once()
+    assert result["state"] == "failed"
+    assert result["job_id"] == job_id
+    stored = get_job(job_id)
+    assert stored["status"] == "failed"
+    assert "planned failure for test" in stored["error"]
+
