@@ -6,8 +6,9 @@ from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel, Field
 from app.auth import require_api_token
 from app.jobs import enqueue_job, list_jobs
+from app.content import build_short_plan
 
-app = FastAPI(title="The Jowi Code Automation API", version="0.2.0", description="Authenticated development queue; publishing is not enabled.")
+app = FastAPI(title="The Jowi Code Automation API", version="0.3.0", description="Authenticated development queue and Shorts planner; publishing is not enabled.")
 
 class ServiceStatus(BaseModel):
     service: str
@@ -19,6 +20,9 @@ class ServiceStatus(BaseModel):
 
 class JobRequest(BaseModel):
     job_type: str = Field(default="short_video", pattern="^short_video$")
+    topic: str = Field(min_length=3, max_length=240)
+
+class PlanRequest(BaseModel):
     topic: str = Field(min_length=3, max_length=240)
 
 @app.get("/health")
@@ -44,3 +48,7 @@ def create_job(request: JobRequest) -> dict[str, str]:
 @app.get("/api/jobs", dependencies=[Depends(require_api_token)])
 def get_jobs() -> dict[str, list[dict[str, str]]]:
     return {"jobs": list_jobs()}
+
+@app.post("/api/scripts/plan", dependencies=[Depends(require_api_token)])
+def plan_script(request: PlanRequest) -> dict:
+    return build_short_plan(request.topic)
