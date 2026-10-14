@@ -376,3 +376,47 @@ def test_worker_marks_invalid_topic_failed_instead_of_leaving_job_running(monkey
     assert stored["status"] == "failed"
     assert "planned failure for test" in stored["error"]
 
+
+
+def test_image_provider_cancels_successful_submissions_when_another_submit_fails(monkeypatch, tmp_path):
+    import app.image_provider as provider
+
+    cancelled = []
+
+    class FakeResponse:
+        def __init__(self, request_id=None, fail=False):
+            self.request_id = request_id
+            self.fail = fail
+
+        def raise_for_status(self):
+            if self.fail:
+                raise RuntimeError("simulated submission failure")
+
+        def json(self):
+            return {"id": self.request_id}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, headers=None, json=None):
+            if "/v2/generate/async" in url:
+                if "bad-prompt" in json["prompt"]:
+                    return FakeResponse(fail=True)
+                return FakeResponse(request_id=f"accepted-{json['prompt'].split()[0]}")
+            if "/v2/generate/soft_cancel/" in url:
+                cancelled.append(url.rsplit("/", 1)[-1])
+                return FakeResponse()
+            raise AssertionError(f"Unexpected POST URL: {url}")
+
+    monkeypatch.setattr(provider.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    with pytest.raises(RuntimeError, match="simulated submission failure"):
+        asyncio.run(
+            provider.generate_scene_images(
+                ["good-one", "bad-prompt", "good-two"], str(tmp_path), timeout_seconds=1
+            )
+        )
+    assert set(cancelled) == {"accepted-good-one", "accepted-good-two"}
