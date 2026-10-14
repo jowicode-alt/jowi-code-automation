@@ -1,7 +1,10 @@
-"""Development API; publishing remains disabled until readiness checks pass."""
+"""Authenticated API; public YouTube publishing remains disabled."""
 from datetime import datetime, timezone
+import importlib.util
 import os
 from pathlib import Path
+import shutil
+import sqlite3
 import uuid
 
 from fastapi import FastAPI, Depends, HTTPException
@@ -12,8 +15,7 @@ from app.jobs import enqueue_job, get_job, list_jobs
 from app.content import build_short_plan
 from app.voice import generate_voiceover
 
-app = FastAPI(title="The Jowi Code Automation API", version="0.4.0", description="Authenticated development queue, Shorts planner, and voiceover; publishing is not enabled.")
-
+app = FastAPI(title="The Jowi Code Automation API", version="0.5.0", description="Authenticated Shorts planning and job queue; YouTube uploads are private-only.")
 class ServiceStatus(BaseModel):
     service: str
     state: str
@@ -21,6 +23,11 @@ class ServiceStatus(BaseModel):
     video_generation_configured: bool
     image_generation_adapter_available: bool
     image_generation_mode: str
+    ffmpeg_available: bool
+    voiceover_adapter_available: bool
+    database_backend: str
+    database_connected: bool
+    database_durable: bool
     youtube_oauth_configured: bool
     timestamp_utc: str
 
@@ -36,23 +43,56 @@ class VoiceoverRequest(BaseModel):
 
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/tmp/jowi-code-output"))
 
+def _database_status() -> tuple[str, bool, bool]:
+    """Return backend, connectivity, durability without exposing connection details."""
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if database_url:
+        try:
+            import psycopg
+            with psycopg.connect(database_url, connect_timeout=3) as connection:
+                connection.execute("SELECT 1").fetchone()
+            return "postgresql", True, True
+        except Exception:
+            return "postgresql_unreachable", False, True
+    path = Path(os.getenv("JOB_DB_PATH", "./data/jobs.sqlite3"))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(path, timeout=2) as connection:
+            connection.execute("SELECT 1").fetchone()
+        return "sqlite_ephemeral", True, False
+    except Exception:
+        return "sqlite_unavailable", False, False
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "jowi-code-automation-api"}
 
 @app.get("/api/status", response_model=ServiceStatus, dependencies=[Depends(require_api_token)])
 def status() -> ServiceStatus:
+    image_key = os.getenv("AI_HORDE_API_KEY", "").strip()
+    image_adapter_available = True
+    ffmpeg_available = shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
+    voiceover_available = importlib.util.find_spec("edge_tts") is not None
+    database_backend, database_connected, database_durable = _database_status()
+    oauth_configured = all(os.getenv(name, "").strip() for name in (
+        "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"
+    ))
+    # This means the required local media adapters/dependencies exist, not that a
+    # real provider run has succeeded. image_generation_mode exposes anonymous limits.
+    media_components_available = image_adapter_available and ffmpeg_available and voiceover_available
     return ServiceStatus(
-        service="jowi-code-automation-api", state="development", publishing_enabled=False,
-        # A registered AI Horde key is optional; anonymous generation may still work,
-        # but is shared and low priority. Report that distinction honestly.
-        video_generation_configured=bool(os.getenv("AI_HORDE_API_KEY", "").strip()),
-        image_generation_adapter_available=True,
-        image_generation_mode=(
-            "registered_key" if os.getenv("AI_HORDE_API_KEY", "").strip()
-            else "anonymous_shared_low_priority"
-        ),
-        youtube_oauth_configured=bool(os.getenv("YOUTUBE_CLIENT_ID") and os.getenv("YOUTUBE_CLIENT_SECRET") and os.getenv("YOUTUBE_REFRESH_TOKEN")),
+        service="jowi-code-automation-api",
+        state="development",
+        publishing_enabled=False,
+        video_generation_configured=media_components_available,
+        image_generation_adapter_available=image_adapter_available,
+        image_generation_mode="registered_key" if image_key and image_key != "0000000000" else "anonymous_shared_low_priority",
+        ffmpeg_available=ffmpeg_available,
+        voiceover_adapter_available=voiceover_available,
+        database_backend=database_backend,
+        database_connected=database_connected,
+        database_durable=database_durable,
+        youtube_oauth_configured=oauth_configured,
         timestamp_utc=datetime.now(timezone.utc).isoformat(),
     )
 
@@ -77,7 +117,6 @@ def get_job_detail(job_id: str) -> dict:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
-
 
 @app.post("/api/scripts/plan", dependencies=[Depends(require_api_token)])
 def plan_script(request: PlanRequest) -> dict:
