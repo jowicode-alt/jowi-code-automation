@@ -156,3 +156,17 @@ def test_pipeline_creates_private_draft_and_cleans_temporary_media(monkeypatch, 
     assert result["video_id"] == "private-test-id"
     assert result["privacy_status"] == "private"
     assert list(output_dir.iterdir()) == []
+
+
+def test_job_detail_requires_auth_and_returns_only_requested_job(monkeypatch, tmp_path):
+    monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "jobs.sqlite3"))
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
+    created = client.post("/api/jobs", json={"topic": "Discipline"}, headers=HEADERS).json()
+    job_id = created["id"]
+    assert client.get(f"/api/jobs/{job_id}").status_code == 401
+    response = client.get(f"/api/jobs/{job_id}", headers=HEADERS)
+    assert response.status_code == 200
+    assert response.json()["id"] == job_id
+    assert response.json()["status"] == "queued"
+    assert client.get("/api/jobs/not-a-uuid", headers=HEADERS).status_code == 404
+    assert client.get("/api/jobs/00000000-0000-0000-0000-000000000000", headers=HEADERS).status_code == 404
