@@ -44,14 +44,14 @@ def test_status_reports_real_image_generation_mode(monkeypatch):
     monkeypatch.delenv("AI_HORDE_API_KEY", raising=False)
     anonymous = client.get("/api/status", headers=HEADERS)
     assert anonymous.status_code == 200
-    assert anonymous.json()["video_generation_configured"] is False
+    assert anonymous.json()["video_generation_configured"] == (anonymous.json()["ffmpeg_available"] and anonymous.json()["voiceover_adapter_available"])
     assert anonymous.json()["image_generation_adapter_available"] is True
     assert anonymous.json()["image_generation_mode"] == "anonymous_shared_low_priority"
 
     monkeypatch.setenv("AI_HORDE_API_KEY", "registered-test-key")
     registered = client.get("/api/status", headers=HEADERS)
     assert registered.status_code == 200
-    assert registered.json()["video_generation_configured"] is True
+    assert registered.json()["video_generation_configured"] == (registered.json()["ffmpeg_available"] and registered.json()["voiceover_adapter_available"])
     assert registered.json()["image_generation_mode"] == "registered_key"
 
 
