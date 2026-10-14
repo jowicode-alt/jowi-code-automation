@@ -12,14 +12,8 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
-      - key: VIDEO_PROVIDER_API_KEY
-        sync: false
-      - key: YOUTUBE_CLIENT_ID
-        sync: false
-      - key: YOUTUBE_CLIENT_SECRET
-        sync: false
-      - key: YOUTUBE_REFRESH_TOKEN
-        sync: false
+      - key: AI_HORDE_MODEL
+        value: AlbedoBase XL (SDXL)
       - key: TTS_VOICE
         value: en-US-GuyNeural
       - key: TTS_RATE
