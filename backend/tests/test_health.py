@@ -420,3 +420,30 @@ def test_image_provider_cancels_successful_submissions_when_another_submit_fails
             )
         )
     assert set(cancelled) == {"accepted-good-one", "accepted-good-two", "accepted-good-three"}
+
+
+def test_worker_requeues_job_abandoned_for_over_45_minutes(monkeypatch, tmp_path):
+    import sqlite3
+    from app.jobs import claim_next_job, enqueue_job, get_job
+
+    db_path = tmp_path / "stale-worker.sqlite3"
+    monkeypatch.setenv("JOB_DB_PATH", str(db_path))
+    created = enqueue_job("short_video", "Recover an interrupted job")
+    first_claim = claim_next_job()
+    assert first_claim["id"] == created["id"]
+    assert first_claim["status"] == "running"
+
+    connection = sqlite3.connect(db_path)
+    connection.execute(
+        "UPDATE jobs SET updated_at_utc = ? WHERE id = ?",
+        ("2020-01-01T00:00:00+00:00", created["id"]),
+    )
+    connection.commit()
+    connection.close()
+
+    recovered_claim = claim_next_job()
+    assert recovered_claim["id"] == created["id"]
+    assert recovered_claim["status"] == "running"
+    recovered = get_job(created["id"])
+    assert recovered["status"] == "running"
+    assert recovered["updated_at_utc"] != "2020-01-01T00:00:00+00:00"
