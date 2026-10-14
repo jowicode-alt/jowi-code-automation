@@ -77,7 +77,7 @@ private fun Dashboard() {
             ) {
                 Text("THE JOWI CODE", style = MaterialTheme.typography.labelLarge)
                 Text("Automation dashboard", style = MaterialTheme.typography.headlineMedium)
-                Text("Manage the development queue from your phone. Video generation and public publishing are not enabled.")
+                Text("Manage the Shorts queue from your phone. Video generation is not yet end-to-end verified; public publishing is disabled.")
 
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -154,7 +154,7 @@ private fun Dashboard() {
                                         JSONObject().put("job_type", "short_video").put("topic", submittedTopic).toString()
                                     )
                                     if (result.first == 202) {
-                                        "Job queued" to "Job ID: ${JSONObject(result.second).optString("id")}. This only queues the request; a full media worker is not yet connected."
+                                        "Job queued" to "Job ID: ${JSONObject(result.second).optString("id")}. The job is queued. Processing is not automatic yet; the manual worker requires a configured database and YouTube OAuth credentials."
                                     } else {
                                         "Could not queue job" to "HTTP ${result.first}: ${safeError(result.second)}"
                                     }
@@ -205,7 +205,7 @@ private fun Dashboard() {
                     }
                 }
                 Text(
-                    "Security: the token is not saved to disk and is cleared when this screen is recreated. Do not share it. Queueing a job does not generate a video yet.",
+                    "Security: the token is not saved to disk and is cleared when this screen is recreated. Do not share it. Queueing a job does not start processing automatically yet.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
