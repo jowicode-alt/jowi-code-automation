@@ -25,8 +25,8 @@ A phone-managed automation system for **The Jowi Code** YouTube channel.
 - Android source now includes HTTPS health check, authenticated status, job queue submission, and queue refresh. It has not yet been compiled or device-tested.
 
 ## Important limitations
-- No programmatic AI scene-image provider is configured. The planner creates prompts; it does not generate lion images.
-- Queued jobs are not yet processed by a background worker.
+- No programmatic AI scene-image provider is configured. The planner creates prompts; it does not generate lion images. To test the worker's render/upload path, supply four pre-generated files named `scene-1.png` through `scene-4.png` in `SCENE_ASSETS_DIR`.
+- A one-shot worker processes one job when manually invoked. It requires four pre-generated scene images in `SCENE_ASSETS_DIR`; automatic image generation and scheduled worker execution are not yet implemented.
 - YouTube OAuth and channel-owner consent have not been configured or tested against the real channel.
 - The backend has not been deployed. The Android app is still a development scaffold, not a built APK.
 - Hosted use needs a strong private `API_ACCESS_TOKEN` and durable `DATABASE_URL`; SQLite on an ephemeral web service is not suitable for production.
