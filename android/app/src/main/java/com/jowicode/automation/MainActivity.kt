@@ -170,7 +170,13 @@ private fun Dashboard() {
                                         val list = JSONObject(result.second).optJSONArray("jobs")
                                         val lines = if (list == null || list.length() == 0) "No jobs yet." else (0 until list.length()).joinToString("\n") { i ->
                                             val job = list.getJSONObject(i)
-                                            "${job.optString("status")} — ${job.optString("topic")} (ID ${job.optString("id")})"
+                                            buildString {
+                                                append("${job.optString("status").uppercase()} — ${job.optString("topic")}")
+                                                append("\\nUpdated: ${job.optString("updated_at_utc", "not recorded")}")
+                                                val error = job.optString("error")
+                                                if (error.isNotBlank() && error != "null") append("\\nNote: $error")
+                                                append("\\nID: ${job.optString("id")}")
+                                            }
                                         }
                                         jobsDetails = lines
                                         "Queue refreshed" to "Loaded ${list?.length() ?: 0} job(s)."
