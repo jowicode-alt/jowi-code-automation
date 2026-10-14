@@ -30,9 +30,10 @@ def run_once() -> dict:
     if job is None:
         return {"state": "idle", "message": "No queued jobs."}
 
-    plan = build_short_plan(job["topic"])
+    plan = None
     temp_assets = None
     try:
+        plan = build_short_plan(job["topic"])
         images = _existing_scene_images()
         if not images:
             from app.image_provider import generate_scene_images
@@ -70,7 +71,11 @@ def run_once() -> dict:
         return {"state": "completed", "job_id": job["id"], "result": result}
     except Exception as exc:
         message = f"Worker failed before verified completion: {type(exc).__name__}: {exc}"
-        update_job_status(job["id"], "failed", error=message)
+        update_job_status(
+            job["id"], "failed", error=message,
+            result={"plan": plan, "media_created": False, "youtube_upload": None}
+            if plan is not None else {"media_created": False, "youtube_upload": None},
+        )
         return {"state": "failed", "job_id": job["id"], "reason": message}
     finally:
         if temp_assets is not None:
