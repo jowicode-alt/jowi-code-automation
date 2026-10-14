@@ -274,6 +274,7 @@ def test_worker_completes_only_after_pipeline_confirms_private_upload(monkeypatc
     from app.worker import run_once
 
     monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "worker-complete.sqlite3"))
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
     monkeypatch.setenv("SCENE_ASSETS_DIR", str(tmp_path / "scenes"))
     scene_dir = tmp_path / "scenes"
     scene_dir.mkdir()
@@ -307,6 +308,7 @@ def test_worker_does_not_complete_if_pipeline_does_not_confirm_private_upload(mo
     from app.worker import run_once
 
     monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "worker-unverified.sqlite3"))
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
     monkeypatch.setenv("SCENE_ASSETS_DIR", str(tmp_path / "scenes"))
     scene_dir = tmp_path / "scenes"
     scene_dir.mkdir()
