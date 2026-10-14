@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Android / Gradle
+.gradle/
+**/build/
+local.properties
+*.jks
+*.keystore
+
+# Generated media and temporary render files
+renders/
+tmp/
+*.mp4
+*.wav
+*.mp3
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
