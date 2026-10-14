@@ -1,13 +1,20 @@
 # One-shot worker
 
-The backend queue worker can be run from the `backend` directory with:
+Run from the `backend` directory:
 
 ```bash
 python -m app.worker
 ```
 
-It claims at most one queued job and records the generated script and four scene prompts. It then marks the job `blocked` because no working image-generation adapter is implemented. It does not claim to have generated a video, and it does not upload to YouTube.
+The worker claims at most one queued job per invocation. It always builds the branded content plan first. To continue to rendering, configure `SCENE_ASSETS_DIR` to a directory containing exactly these four existing files:
 
-This is deliberately fail-closed. A configured API key alone is not proof that an image provider is integrated. To complete automation, implement and test a provider adapter, persist or supply the resulting scene images, verify the rendered MP4, and only then connect the private YouTube upload path.
+- `scene-1.png`
+- `scene-2.png`
+- `scene-3.png`
+- `scene-4.png`
 
-The worker is not deployed or scheduled. Use a single worker instance until queue concurrency and recovery behavior have been tested. No workflow artifacts are uploaded by the checks workflow.
+These are pre-generated assets; the repository does not yet include an automatic image-generation provider. If any file is missing, the worker stores the plan and marks the job `blocked`. No video is claimed to exist in that case.
+
+When all four images exist, the worker invokes the existing pipeline: voiceover, FFmpeg vertical render, then a YouTube upload requested as **private**. A job is marked `completed` only if the pipeline returns a video ID and explicitly confirms private visibility. Provider errors or unverified results are recorded as failures. Public publishing is not implemented.
+
+The worker is not deployed or scheduled. Run one worker instance until concurrency and crash recovery are tested. Hosted operation needs durable database storage and secure environment secrets. CI remains checks-only and must not upload artifacts.
