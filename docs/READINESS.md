@@ -6,7 +6,7 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] Separate repository exists.
 - [x] No per-run workflow artifact uploads; no APK build workflow is configured.
 - [x] Checks-only workflow runs pytest; latest recorded backend test run passed.
-- [ ] Verify CI after Android and documentation changes.
+- [x] Verify latest CI run after the current backend test fixes (run #72 passed).
 
 ## Backend
 - [x] Public liveness endpoint.
@@ -20,15 +20,15 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] FFmpeg vertical MP4 renderer function.
 - [x] Pipeline function connects narration, rendering, and private-only YouTube upload; tested with mocked providers.
 - [x] YouTube upload adapter restricted to private uploads.
-- [ ] Add and deploy a single worker process to consume queued jobs; lifecycle storage is ready but jobs are not processed automatically yet.
+- [x] One-shot worker implemented and covered by mocked tests; [ ] deploy and schedule it (jobs are not processed automatically yet).
 - [ ] Configure and verify a durable free-tier database.
 - [ ] Deploy to a free-tier host and verify sleep/restart/resource limitations.
 
 ## Video and voice
 - [x] Deep male voiceover adapter with configurable voice/rate/pitch; online service availability is not guaranteed.
 - [x] Four-scene brand prompt planner and FFmpeg assembly function for 9:16 output.
-- [ ] Select an affordable, rights-compliant programmatic image provider; no $0 provider is confirmed.
-- [ ] Generate consistent lion scene assets automatically.
+- [x] Optional AI Horde volunteer-powered image provider adapter implemented; free availability/latency is not guaranteed.
+- [ ] Live-generate and review four scene assets; character consistency is not yet guaranteed.
 - [ ] Test full render quality, audio sync, duration, file size, and cleanup on the deployed host.
 
 ## YouTube
@@ -47,7 +47,7 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [ ] Build one release APK only after backend and end-to-end readiness checks pass.
 
 ## Release gate
-- [ ] Latest CI green after all current changes.
+- [x] Latest recorded CI run #72 is green; rerun after subsequent changes.
 - [ ] No secrets in repository or logs.
 - [ ] No unapproved public upload possible.
 - [ ] No per-workflow artifacts.
