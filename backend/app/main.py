@@ -8,7 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from app.auth import require_api_token
-from app.jobs import enqueue_job, list_jobs
+from app.jobs import enqueue_job, get_job, list_jobs
 from app.content import build_short_plan
 from app.voice import generate_voiceover
 
@@ -57,6 +57,18 @@ def create_job(request: JobRequest) -> dict[str, str]:
 @app.get("/api/jobs", dependencies=[Depends(require_api_token)])
 def get_jobs() -> dict[str, list[dict[str, str]]]:
     return {"jobs": list_jobs()}
+
+@app.get("/api/jobs/{job_id}", dependencies=[Depends(require_api_token)])
+def get_job_detail(job_id: str) -> dict[str, str]:
+    try:
+        safe_id = str(uuid.UUID(job_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Job not found") from exc
+    job = get_job(safe_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
 
 @app.post("/api/scripts/plan", dependencies=[Depends(require_api_token)])
 def plan_script(request: PlanRequest) -> dict:
