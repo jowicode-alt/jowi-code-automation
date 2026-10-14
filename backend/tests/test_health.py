@@ -60,3 +60,21 @@ def test_job_queue_limits_new_jobs_to_three_per_utc_day(monkeypatch, tmp_path):
         assert response.status_code == 202
     limited = client.post("/api/jobs", json={"topic": "One more topic"}, headers=HEADERS)
     assert limited.status_code == 429
+
+
+def test_script_planner_returns_brand_consistent_vertical_scenes(monkeypatch):
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
+    response = client.post("/api/scripts/plan", json={"topic": "Discipline"}, headers=HEADERS)
+    assert response.status_code == 200
+    plan = response.json()
+    assert plan["format"] == "YouTube Short, vertical 9:16"
+    assert plan["tagline"] == "Master Your Mind. Build Your Future."
+    assert len(plan["scenes"]) == 4
+    assert "black male lion" in plan["scenes"][0]["visual_prompt"]
+    assert "no on-screen captions" in plan["voice"]
+    assert plan["publishing_enabled"] is False
+
+
+def test_script_planner_requires_authentication(monkeypatch):
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
+    assert client.post("/api/scripts/plan", json={"topic": "Discipline"}).status_code == 401
