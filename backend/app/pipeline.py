@@ -25,7 +25,7 @@ async def build_private_draft(topic: str, scene_images: list[str], output_dir: s
     try:
         await generate_voiceover(plan["narration"], str(audio_path))
         await asyncio.to_thread(render_short, scene_images, str(audio_path), str(video_path))
-        description = f'{plan["tagline"]}\\n\\n{plan["narration"]}\\n\\nSubscribe to The Jowi Code. Thanks for watching.'
+        description = f'{plan["tagline"]}\n\n{plan["narration"]}\n\nSubscribe to The Jowi Code. Thanks for watching.'
         result = await asyncio.to_thread(upload_video_private, str(video_path), plan["title"], description, ["The Jowi Code", "discipline", "mindset", "motivation", "shorts"])
         return {"video_id": result["video_id"], "privacy_status": "private", "title": plan["title"], "status": "uploaded_private"}
     finally:
