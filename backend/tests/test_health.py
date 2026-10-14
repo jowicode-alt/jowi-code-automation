@@ -39,6 +39,22 @@ def test_status_requires_token_and_does_not_enable_publishing(monkeypatch):
     assert "timestamp_utc" in response.json()
 
 
+def test_status_reports_real_image_generation_mode(monkeypatch):
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
+    monkeypatch.delenv("AI_HORDE_API_KEY", raising=False)
+    anonymous = client.get("/api/status", headers=HEADERS)
+    assert anonymous.status_code == 200
+    assert anonymous.json()["video_generation_configured"] is False
+    assert anonymous.json()["image_generation_adapter_available"] is True
+    assert anonymous.json()["image_generation_mode"] == "anonymous_shared_low_priority"
+
+    monkeypatch.setenv("AI_HORDE_API_KEY", "registered-test-key")
+    registered = client.get("/api/status", headers=HEADERS)
+    assert registered.status_code == 200
+    assert registered.json()["video_generation_configured"] is True
+    assert registered.json()["image_generation_mode"] == "registered_key"
+
+
 def test_job_queue_requires_authentication(monkeypatch, tmp_path):
     monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "jobs.sqlite3"))
     monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
