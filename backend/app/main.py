@@ -48,14 +48,14 @@ def status() -> ServiceStatus:
     )
 
 @app.post("/api/jobs", status_code=202, dependencies=[Depends(require_api_token)])
-def create_job(request: JobRequest) -> dict[str, str]:
+def create_job(request: JobRequest) -> dict:
     try:
         return enqueue_job(request.job_type, request.topic)
     except ValueError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
 
 @app.get("/api/jobs", dependencies=[Depends(require_api_token)])
-def get_jobs() -> dict[str, list[dict[str, str]]]:
+def get_jobs() -> dict:
     return {"jobs": list_jobs()}
 
 @app.get("/api/jobs/{job_id}", dependencies=[Depends(require_api_token)])
