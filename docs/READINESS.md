@@ -10,12 +10,14 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] Image signature validation, anonymous-versus-registered sharing mode, worker planning failure handling, and partial AI Horde submission cleanup have regression tests.
 - [x] Added a manual-only private worker workflow; it has no cron schedule, no artifact upload, and requires the operator to type PRIVATE before a single job can be processed.
 - [ ] Verify the new workflow's GitHub Actions syntax and behavior in a controlled run after required secrets and a queued test job exist.
+- [x] Android source messaging now accurately says queueing does not automatically start the manual worker; source has not yet been compiled or device-tested.
 
 ## Backend
 - [x] Public liveness endpoint.
 - [x] Bearer-token authentication for protected endpoints; fails closed if token is absent.
 - [x] Bounded job enqueue/list/detail API; maximum three jobs per UTC day; detail endpoint is authenticated.
 - [x] Job lifecycle schema tracks status, last update, error, and JSON result; legacy SQLite queues are migrated on access.
+- [x] Worker re-queues jobs left running for over 45 minutes, with a regression test; the threshold exceeds the current 20-minute workflow timeout.
 - [x] Lifecycle transitions are validated; blocked/failed jobs can be explicitly re-queued.
 - [x] PostgreSQL adapter for hosted queue state; SQLite is local-development fallback only.
 - [x] Brand-safe script and scene-prompt planner.
