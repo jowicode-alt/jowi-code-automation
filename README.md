@@ -2,44 +2,44 @@
 
 A phone-managed automation system for **The Jowi Code** YouTube channel.
 
-## Goals
-- Target 2–3 Shorts per day.
-- Preserve the established Jowi lion brand: photorealistic black anthropomorphic male lion, black suit, white shirt, gold tie, gold eyes, serious expression.
-- Vertical 9:16 videos, deep male voiceover, no captions, no typing/snap/ether effects.
-- End videos with the channel's subscribe / “Thanks for watching” call to action.
-- Prefer free services and disclose any unavoidable costs before enabling them.
-- Android app + backend, controlled from a phone.
+## Brand and targets
+- Target 2–3 Shorts per day, with a hard queue limit of three jobs per UTC day.
+- Keep the photorealistic black anthropomorphic male lion, black suit, white shirt, gold tie, gold eyes, and serious expression.
+- Vertical 9:16, deep male voiceover, no captions, no typing/snap/ether effects.
+- Preserve the tagline “Master Your Mind. Build Your Future.” and a subscribe / “Thanks for watching” close.
+- Prefer $0 services and disclose reliability or quota limitations.
 
 ## Artifact policy
-**Do not upload or retain a downloadable artifact for each workflow run.** During development, CI should run checks only and must not use the GitHub Actions `upload-artifact` action. A release APK should be built and retained only after readiness checks pass and a release is deliberately requested.
+**No downloadable artifact should be uploaded or retained for every workflow run.** CI runs checks only and must not use `actions/upload-artifact`. The APK should be built only after the backend contract and readiness checks are complete, and only for a deliberate release.
 
-## Current status
-This repository is being initialized. No production video generation, YouTube upload, scheduled publishing, or APK release is enabled yet. Do not claim the system is ready until the readiness checklist is complete.
+## Implemented foundation
+- FastAPI health endpoint and bearer-token-protected status endpoint.
+- Authenticated job enqueue/list endpoints with a three-job daily limit.
+- SQLite local development queue and PostgreSQL support through `DATABASE_URL`.
+- Brand-consistent script and four-scene prompt planner.
+- Optional no-key Edge TTS voiceover endpoint; it requires outbound internet and can be unavailable because it uses a third-party online service.
+- FFmpeg vertical 9:16 renderer that combines four scene images and audio.
+- YouTube Data API adapter that uploads videos as **private only**.
+- Docker-based Render blueprint with auto-deploy disabled.
+- Checks-only GitHub Actions workflow with no artifact uploads. Latest recorded run passed: [workflow run](https://github.com/jowicode-alt/jowi-code-automation/actions/runs/38631535943).
 
-## Planned structure
-- `backend/` — API service and automation orchestration.
-- `android/` — Android control app.
-- `docs/READINESS.md` — launch gates and validation checklist.
-- `.github/workflows/` — later, checks-only workflows; no per-run artifacts.
+## Important limitations — not production-ready yet
+- No programmatic AI scene-image/video provider has been selected or configured. The planner currently produces scene prompts; it does not generate the lion images itself.
+- Queue jobs are not yet connected to a background worker that runs the complete plan → voice → image assets → render → private YouTube upload pipeline.
+- YouTube OAuth credentials and channel-owner consent have not been configured or tested against the real channel.
+- The backend has not been deployed, and the Android app is still a dashboard scaffold with only a health check.
+- The Render blueprint expects a strong `API_ACCESS_TOKEN` and a durable PostgreSQL `DATABASE_URL` to be set privately. SQLite on a free web service is not durable across restarts. Select a suitable free database and check its limits before deploying.
+- Automatic public publishing is intentionally disabled. The YouTube adapter can only upload as private; public scheduling must wait for owner review and separate readiness approval.
 
-## Development sequence
-1. Establish backend health/status endpoints.
-2. Define secure configuration and authentication before exposing control endpoints.
-3. Implement draft/script and render-job orchestration.
-4. Integrate video/voice providers only after validating free-tier limits and fallback behavior.
-5. Add YouTube OAuth and private upload/scheduling, initially in dry-run mode.
-6. Build the Android controller and connect it to the secured backend.
-7. Run readiness checks; then produce one final APK only after approval.
-
-## Required configuration (not set up yet)
-Never commit API keys, OAuth client secrets, access tokens, signing keys, or keystores. Use hosting environment variables / GitHub Secrets. YouTube upload requires the channel owner to complete OAuth consent.
-
-## Local backend check
+## Local backend
 From `backend/`:
 ```sh
 python -m venv .venv
 # activate the virtual environment
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
+export API_ACCESS_TOKEN="use-a-long-random-local-secret"
 uvicorn app.main:app --reload
-``
-Then open `/health` on the local server.
+```
+`GET /health` is public. `/api/status`, `/api/jobs`, `/api/scripts/plan`, and `/api/voiceover` require `Authorization: Bearer <API_ACCESS_TOKEN>`.
+
+Never commit API keys, OAuth secrets, access tokens, signing keys, or keystores. Do not put provider credentials in the Android source code.
