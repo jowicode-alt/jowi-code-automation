@@ -266,3 +266,62 @@ def test_worker_processes_only_one_job_per_invocation(monkeypatch, tmp_path):
     assert run_once()["job_id"] == first["id"]
     assert get_job(first["id"])["status"] == "blocked"
     assert get_job(second["id"])["status"] == "queued"
+
+
+def test_worker_completes_only_after_pipeline_confirms_private_upload(monkeypatch, tmp_path):
+    from app.jobs import get_job
+    import app.pipeline as pipeline
+    from app.worker import run_once
+
+    monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "worker-complete.sqlite3"))
+    monkeypatch.setenv("SCENE_ASSETS_DIR", str(tmp_path / "scenes"))
+    scene_dir = tmp_path / "scenes"
+    scene_dir.mkdir()
+    for index in range(1, 5):
+        (scene_dir / f"scene-{index}.png").write_bytes(b"test-image")
+    created = client.post(
+        "/api/jobs", json={"topic": "Build discipline"}, headers=HEADERS
+    ).json()
+
+    async def fake_pipeline(topic, scene_images):
+        assert len(scene_images) == 4
+        return {
+            "video_id": "confirmed-private-id",
+            "privacy_status": "private",
+            "title": topic,
+            "status": "uploaded_private",
+        }
+
+    monkeypatch.setattr(pipeline, "build_private_draft", fake_pipeline)
+    result = run_once()
+    job = get_job(created["id"])
+    assert result["state"] == "completed"
+    assert job["status"] == "completed"
+    assert job["result"]["youtube_upload"]["video_id"] == "confirmed-private-id"
+    assert job["result"]["youtube_upload"]["privacy_status"] == "private"
+
+
+def test_worker_does_not_complete_if_pipeline_does_not_confirm_private_upload(monkeypatch, tmp_path):
+    from app.jobs import get_job
+    import app.pipeline as pipeline
+    from app.worker import run_once
+
+    monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "worker-unverified.sqlite3"))
+    monkeypatch.setenv("SCENE_ASSETS_DIR", str(tmp_path / "scenes"))
+    scene_dir = tmp_path / "scenes"
+    scene_dir.mkdir()
+    for index in range(1, 5):
+        (scene_dir / f"scene-{index}.png").write_bytes(b"test-image")
+    created = client.post(
+        "/api/jobs", json={"topic": "Build discipline"}, headers=HEADERS
+    ).json()
+
+    async def fake_pipeline(topic, scene_images):
+        return {"status": "uploaded_private", "privacy_status": "public", "video_id": "wrong"}
+
+    monkeypatch.setattr(pipeline, "build_private_draft", fake_pipeline)
+    result = run_once()
+    job = get_job(created["id"])
+    assert result["state"] == "failed"
+    assert job["status"] == "failed"
+    assert "did not confirm a private YouTube upload" in job["error"]
