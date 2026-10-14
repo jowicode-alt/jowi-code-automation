@@ -177,6 +177,7 @@ def test_job_lifecycle_tracks_updated_time_and_rejects_invalid_transitions(monke
     from app.jobs import get_job, update_job_status
 
     monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "jobs.sqlite3"))
+    monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
     created = client.post(
         "/api/jobs", json={"topic": "Build discipline"}, headers=HEADERS
     ).json()
