@@ -1,19 +1,19 @@
-"""One-shot queue worker with explicit asset and upload verification."""
+"""One-shot queue worker with bounded image generation and private-upload verification."""
 import asyncio
 import os
 from pathlib import Path
+import tempfile
 
 from app.content import build_short_plan
 from app.jobs import claim_next_job, update_job_status
 
 BLOCKED_REASON = (
-    "Four scene images are unavailable. Configure SCENE_ASSETS_DIR with "
-    "scene-1.png through scene-4.png; automatic image generation is not integrated."
+    "Image generation could not produce four usable scene images. "
+    "Check AI Horde availability, model support, queue time, and network access."
 )
 
 
-def _scene_images() -> list[str]:
-    """Resolve four pre-generated scene images in a deterministic order."""
+def _existing_scene_images() -> list[str]:
     raw_dir = os.getenv("SCENE_ASSETS_DIR", "").strip()
     if not raw_dir:
         return []
@@ -30,17 +30,24 @@ def run_once() -> dict:
     if job is None:
         return {"state": "idle", "message": "No queued jobs."}
 
+    plan = build_short_plan(job["topic"])
+    temp_assets = None
     try:
-        plan = build_short_plan(job["topic"])
-        images = _scene_images()
-        if len(images) != 4:
-            update_job_status(
-                job["id"], "blocked", error=BLOCKED_REASON,
-                result={"plan": plan, "media_created": False, "youtube_upload": None},
-            )
-            return {"state": "blocked", "job_id": job["id"], "reason": BLOCKED_REASON}
+        images = _existing_scene_images()
+        if not images:
+            from app.image_provider import generate_scene_images
+            temp_assets = tempfile.TemporaryDirectory(prefix="jowi-scenes-")
+            prompts = [scene["visual_prompt"] for scene in plan["scenes"]]
+            try:
+                images = asyncio.run(generate_scene_images(prompts, temp_assets.name))
+            except Exception as exc:
+                message = f"{BLOCKED_REASON} Provider detail: {type(exc).__name__}: {exc}"
+                update_job_status(
+                    job["id"], "blocked", error=message,
+                    result={"plan": plan, "media_created": False, "youtube_upload": None},
+                )
+                return {"state": "blocked", "job_id": job["id"], "reason": message}
 
-        # Imported lazily so the planning/blocked path needs no media or YouTube setup.
         from app.pipeline import build_private_draft
         pipeline_result = asyncio.run(build_private_draft(job["topic"], images))
         if (
@@ -65,6 +72,9 @@ def run_once() -> dict:
         message = f"Worker failed before verified completion: {type(exc).__name__}: {exc}"
         update_job_status(job["id"], "failed", error=message)
         return {"state": "failed", "job_id": job["id"], "reason": message}
+    finally:
+        if temp_assets is not None:
+            temp_assets.cleanup()
 
 
 if __name__ == "__main__":
