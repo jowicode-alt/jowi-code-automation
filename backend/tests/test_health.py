@@ -229,7 +229,12 @@ def test_existing_sqlite_queue_schema_is_migrated(monkeypatch, tmp_path):
 def test_worker_claims_job_and_blocks_honestly_without_image_provider(monkeypatch, tmp_path):
     from app.jobs import get_job
     from app.worker import run_once, BLOCKED_REASON
+    import app.image_provider as image_provider
 
+    async def fake_image_generation(prompts, output_dir):
+        raise TimeoutError("simulated provider timeout")
+
+    monkeypatch.setattr(image_provider, "generate_scene_images", fake_image_generation)
     monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "worker.sqlite3"))
     monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
     created = client.post(
@@ -257,7 +262,12 @@ def test_worker_returns_idle_when_queue_is_empty(monkeypatch, tmp_path):
 def test_worker_processes_only_one_job_per_invocation(monkeypatch, tmp_path):
     from app.jobs import get_job
     from app.worker import run_once
+    import app.image_provider as image_provider
 
+    async def fake_image_generation(prompts, output_dir):
+        raise TimeoutError("simulated provider timeout")
+
+    monkeypatch.setattr(image_provider, "generate_scene_images", fake_image_generation)
     monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "one-at-a-time.sqlite3"))
     monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
     first = client.post("/api/jobs", json={"topic": "First topic"}, headers=HEADERS).json()
