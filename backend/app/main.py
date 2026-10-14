@@ -19,6 +19,8 @@ class ServiceStatus(BaseModel):
     state: str
     publishing_enabled: bool
     video_generation_configured: bool
+    image_generation_adapter_available: bool
+    image_generation_mode: str
     youtube_oauth_configured: bool
     timestamp_utc: str
 
@@ -42,7 +44,14 @@ def health() -> dict[str, str]:
 def status() -> ServiceStatus:
     return ServiceStatus(
         service="jowi-code-automation-api", state="development", publishing_enabled=False,
-        video_generation_configured=bool(os.getenv("VIDEO_PROVIDER_API_KEY")),
+        # A registered AI Horde key is optional; anonymous generation may still work,
+        # but is shared and low priority. Report that distinction honestly.
+        video_generation_configured=bool(os.getenv("AI_HORDE_API_KEY", "").strip()),
+        image_generation_adapter_available=True,
+        image_generation_mode=(
+            "registered_key" if os.getenv("AI_HORDE_API_KEY", "").strip()
+            else "anonymous_shared_low_priority"
+        ),
         youtube_oauth_configured=bool(os.getenv("YOUTUBE_CLIENT_ID") and os.getenv("YOUTUBE_CLIENT_SECRET") and os.getenv("YOUTUBE_REFRESH_TOKEN")),
         timestamp_utc=datetime.now(timezone.utc).isoformat(),
     )
