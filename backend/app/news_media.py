@@ -243,54 +243,116 @@ def _script(topic: str, sources: list[dict], facts: list[str], client: httpx.Cli
 
 
 def _video_results(topic: str, client: httpx.Client) -> list[dict]:
-    # Query Commons for actual video files only; no generic generated illustrations.
-    query = re.sub(r"[^\w\s-]", " ", topic)
-    query = " ".join(query.split()[:8])
-    params = {
-        "action": "query", "format": "json", "generator": "search",
-        "gsrsearch": f"{query} filemime:video", "gsrnamespace": 6,
-        "gsrlimit": 30, "prop": "imageinfo", "iiprop": "url|extmetadata|mime|size",
+    """Search several focused Commons queries, then rank only relevant, licensed videos.
+
+    The topic may be a long headline rather than the words used in a Commons file title.
+    Try the original phrase, compact keyword combinations, and individual meaningful terms.
+    Relevance is checked against both the file title and its description; licence checks
+    remain mandatory and a missing/unclear licence is never treated as permission.
+    """
+    stop_words = {
+        "about", "after", "amid", "among", "around", "before", "being", "between",
+        "breaking", "could", "during", "from", "have", "into", "latest", "near",
+        "over", "says", "that", "their", "there", "these", "this", "today", "update",
+        "what", "when", "where", "which", "while", "with", "would", "your", "news",
+        "video", "footage", "report", "reports",
     }
-    response = client.get(COMMONS_API, params=params, headers={"User-Agent": USER_AGENT})
-    if response.status_code == 403:
-        raise RuntimeError(
-            "Wikimedia Commons denied the API request (HTTP 403). The client sends a "
-            "descriptive User-Agent with a contact URL; do not bypass the denial or use "
-            "unverified footage. Check the response details and retry later if access is "
-            "temporarily restricted."
-        )
-    response.raise_for_status()
-    pages = response.json().get("query", {}).get("pages", {})
+    topic_terms = []
+    for word in re.findall(r"[a-z0-9]{3,}", topic.lower()):
+        if word not in stop_words and word not in topic_terms:
+            topic_terms.append(word)
+    if not topic_terms:
+        return []
+
+    # Use bounded, serial requests to be kind to Commons' shared API.
+    queries = []
+    clean_topic = " ".join(re.findall(r"[\w-]+", topic))[:120].strip()
+    if clean_topic:
+        queries.append(clean_topic)
+    if len(topic_terms) >= 2:
+        queries.append(" ".join(topic_terms[:4]))
+        queries.append(" ".join(topic_terms[:2]))
+    queries.extend(topic_terms[:4])
+    unique_queries = []
+    for query in queries:
+        if query and query.casefold() not in {q.casefold() for q in unique_queries}:
+            unique_queries.append(query)
+
+    candidates_by_title = {}
+    for query in unique_queries[:5]:
+        params = {
+            "action": "query", "format": "json", "generator": "search",
+            "gsrsearch": f"{query} filemime:video", "gsrnamespace": 6,
+            "gsrlimit": 30, "prop": "imageinfo",
+            "iiprop": "url|extmetadata|mime|size",
+        }
+        response = client.get(COMMONS_API, params=params, headers={"User-Agent": USER_AGENT})
+        if response.status_code == 403:
+            raise RuntimeError(
+                "Wikimedia Commons denied the API request (HTTP 403). The client sends a "
+                "descriptive User-Agent with a contact URL; do not bypass the denial or use "
+                "unverified footage. Check the response details and retry later if access is "
+                "temporarily restricted."
+            )
+        if response.status_code in {429, 503}:
+            # Respect provider throttling/temporary overload; do not fan out more requests.
+            print(f"Wikimedia Commons search temporarily unavailable (HTTP {response.status_code}).", flush=True)
+            break
+        response.raise_for_status()
+        pages = response.json().get("query", {}).get("pages", {})
+        for page in pages.values():
+            title = page.get("title", "")
+            if not title:
+                continue
+            candidates_by_title.setdefault(title, (page, query))
+        if len(candidates_by_title) >= 100:
+            break
+
     results = []
-    for page in pages.values():
+    for page, matched_query in candidates_by_title.values():
         info = (page.get("imageinfo") or [{}])[0]
         url = info.get("url", "")
-        if not url.lower().endswith(VIDEO_EXTENSIONS):
+        mime = str(info.get("mime", "")).lower()
+        if not url.lower().split("?", 1)[0].endswith(VIDEO_EXTENSIONS) and not mime.startswith("video/"):
             continue
         metadata = info.get("extmetadata") or {}
-        license_name = re.sub("<[^>]+>", "", metadata.get("LicenseShortName", {}).get("value", ""))
+        license_name = re.sub(r"<[^>]+>", " ", str(metadata.get("LicenseShortName", {}).get("value", "")))
+        license_name = " ".join(unescape(license_name).split())
         license_lower = license_name.lower()
-        if "nc" in license_lower or "noncommercial" in license_lower or "nd" in license_lower or "noderivatives" in license_lower:
+        if not license_name or any(term in license_lower for term in ("noncommercial", "non-commercial", "no derivatives", "noderivatives", " nc", " nd")):
             continue
         if not any(allowed.lower() in license_lower for allowed in ALLOWED_LICENSES):
             continue
-        topic_terms = {word for word in re.findall(r"[a-z0-9]{4,}", query.lower())}
-        title_terms = {word for word in re.findall(r"[a-z0-9]{4,}", page.get("title", "").lower())}
-        overlap = len(topic_terms & title_terms)
-        if topic_terms and overlap < (2 if len(topic_terms) >= 3 else 1):
+        description = re.sub(r"<[^>]+>", " ", str(metadata.get("ImageDescription", {}).get("value", "")))
+        description = " ".join(unescape(description).split())
+        title_terms = set(re.findall(r"[a-z0-9]{3,}", title.lower()))
+        description_terms = set(re.findall(r"[a-z0-9]{3,}", description.lower()))
+        matched_terms = set(topic_terms) & (title_terms | description_terms)
+        if not matched_terms:
             continue
-        if int(info.get("size", 0) or 0) > MAX_VIDEO_BYTES:
+        try:
+            size = int(info.get("size", 0) or 0)
+        except (TypeError, ValueError):
+            size = 0
+        if size <= 0 or size > MAX_VIDEO_BYTES:
             continue
+        # Rank files by topic overlap, preferring specific matches over generic B-roll.
+        score = len(set(topic_terms) & title_terms) * 3 + len(set(topic_terms) & description_terms)
         results.append({
-            "title": page.get("title", "Wikimedia Commons video"),
+            "title": title,
             "url": url,
             "license": license_name,
-            "artist": re.sub("<[^>]+>", "", metadata.get("Artist", {}).get("value", "Unknown")),
-            "page": "https://commons.wikimedia.org/wiki/" + quote(page.get("title", "").replace(" ", "_")),
-            "size": int(info.get("size", 0) or 0),
+            "artist": re.sub(r"<[^>]+>", " ", str(metadata.get("Artist", {}).get("value", "Unknown"))).strip() or "Unknown",
+            "page": str(info.get("descriptionurl") or ("https://commons.wikimedia.org/wiki/" + quote(title.replace(" ", "_")))),
+            "size": size,
+            "_relevance": score,
+            "_matched_query": matched_query,
         })
+    results.sort(key=lambda item: item["_relevance"], reverse=True)
+    for item in results:
+        item.pop("_relevance", None)
+        item.pop("_matched_query", None)
     return results
-
 
 def build_news_package(topic: str, sources: list[dict], output_dir: str) -> dict:
     """Download licensed moving footage and construct narration from fetched article facts."""
