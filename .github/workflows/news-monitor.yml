@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      has_new_candidate: ${{ steps.scan.outputs.has_new_candidate }}
+      has_pending_jobs: ${{ steps.scan.outputs.has_pending_jobs }}
     defaults:
       run:
         working-directory: backend
@@ -58,13 +58,13 @@ jobs:
           with open("/tmp/news-monitor.json", encoding="utf-8") as handle:
               result = json.load(handle)
           new_items = [item for item in result.get("queued", []) if not item.get("deduplicated", False)]
-          print(f"has_new_candidate={'true' if new_items else 'false'}")
+          print(f"has_pending_jobs={'true' if result.get('pending_news_jobs', 0) else 'false'}")
           print(f"new_candidate_count={len(new_items)}")
           PY
 
   create-private-news-draft:
     needs: monitor
-    if: ${{ needs.monitor.outputs.has_new_candidate == 'true' }}
+    if: ${{ needs.monitor.outputs.has_pending_jobs == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
