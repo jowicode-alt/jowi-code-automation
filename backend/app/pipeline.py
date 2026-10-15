@@ -50,11 +50,15 @@ async def build_private_draft(
             await generate_voiceover(narration, str(audio_path))
             word_boundaries = None
         if news_package:
-            await asyncio.to_thread(
-                render_news_short, news_package["clips"], str(audio_path), str(video_path), narration, word_boundaries
-            )
+            render_args = (news_package["clips"], str(audio_path), str(video_path), narration)
+            if word_boundaries is not None:
+                render_args += (word_boundaries,)
+            await asyncio.to_thread(render_news_short, *render_args)
         else:
-            await asyncio.to_thread(render_short, scene_images, str(audio_path), str(video_path), narration, word_boundaries)
+            render_args = (scene_images, str(audio_path), str(video_path), narration)
+            if word_boundaries is not None:
+                render_args += (word_boundaries,)
+            await asyncio.to_thread(render_short, *render_args)
 
         source_lines = [
             f'{source.get("source", "Source")}: {source.get("url", "")}'
