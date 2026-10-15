@@ -319,7 +319,14 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
         license_name = re.sub(r"<[^>]+>", " ", str(metadata.get("LicenseShortName", {}).get("value", "")))
         license_name = " ".join(unescape(license_name).split())
         license_lower = license_name.lower()
-        if not license_name or any(term in license_lower for term in ("noncommercial", "non-commercial", "no derivatives", "noderivatives", " nc", " nd")):
+        restricted_license = (
+            "noncommercial" in license_lower
+            or "non-commercial" in license_lower
+            or "no derivatives" in license_lower
+            or "noderivatives" in license_lower
+            or bool(re.search(r"(?:^|[-\\s])(?:nc|nd)(?:[-\\s]|$)", license_lower))
+        )
+        if not license_name or restricted_license:
             continue
         if not any(allowed.lower() in license_lower for allowed in ALLOWED_LICENSES):
             continue
