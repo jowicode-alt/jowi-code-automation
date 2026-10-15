@@ -14,6 +14,9 @@ on:
         options:
           - all
           - breaking_news
+          - ai_technology
+          - comedy
+          - entertainment
         default: all
       retry_blocked_job_id:
         description: "Optional: re-queue a specific blocked test or breaking-news job"
@@ -110,12 +113,20 @@ jobs:
       - name: Select the queued job category
         shell: bash
         run: |
-          if [[ "$JOB_CATEGORY_INPUT" == "breaking_news" ]]; then
-            echo "JOB_CATEGORY_FILTER=breaking_news" >> "$GITHUB_ENV"
-            echo "This run will process only a breaking-news candidate."
-          else
-            echo "This run may process any queued job."
-          fi
+          case "$JOB_CATEGORY_INPUT" in
+            all)
+              echo "JOB_CATEGORY_FILTER=" >> "$GITHUB_ENV"
+              echo "This run may process any queued content category."
+              ;;
+            breaking_news|ai_technology|comedy|entertainment)
+              echo "JOB_CATEGORY_FILTER=$JOB_CATEGORY_INPUT" >> "$GITHUB_ENV"
+              echo "This run will process only the selected category: $JOB_CATEGORY_INPUT."
+              ;;
+            *)
+              echo "::error::Unsupported content category: $JOB_CATEGORY_INPUT"
+              exit 1
+              ;;
+          esac
 
       - name: Process queued job
         run: python -m app.worker
