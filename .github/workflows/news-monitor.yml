@@ -17,8 +17,6 @@ jobs:
   monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    outputs:
-      has_pending_jobs: ${{ steps.scan.outputs.has_pending_jobs }}
     defaults:
       run:
         working-directory: backend
@@ -48,71 +46,8 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Poll feeds, corroborate headlines, and queue candidates
-        id: scan
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m app.news_monitor | tee /tmp/news-monitor.json
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          with open("/tmp/news-monitor.json", encoding="utf-8") as handle:
-              result = json.load(handle)
-          new_items = [item for item in result.get("queued", []) if not item.get("deduplicated", False)]
-          print(f"has_pending_jobs={'true' if result.get('pending_news_jobs', 0) else 'false'}")
-          print(f"new_candidate_count={len(new_items)}")
-          PY
+        run: python -m app.news_monitor
 
-  create-private-news-draft:
-    needs: monitor
-    if: ${{ needs.monitor.outputs.has_pending_jobs == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: backend
-    env:
-      DATABASE_URL: ${{ secrets.JOWI_DATABASE_URL }}
-      AI_HORDE_API_KEY: ${{ secrets.AI_HORDE_API_KEY }}
-      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-      TTS_VOICE: en-US-GuyNeural
-      TTS_RATE: -5%
-      TTS_PITCH: -8Hz
-      JOB_CATEGORY_FILTER: breaking_news
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v4
-
-      - name: Check private-upload credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in DATABASE_URL YOUTUBE_CLIENT_ID YOUTUBE_CLIENT_SECRET YOUTUBE_REFRESH_TOKEN; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "::warning::${name} is missing. News was monitored and queued, but no private video draft was created."
-              echo "skip_news_worker=true" >> "$GITHUB_ENV"
-              exit 0
-            fi
-          done
-
-      - name: Set up Python
-        if: ${{ env.skip_news_worker != 'true' }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: backend/requirements.txt
-
-      - name: Install FFmpeg and Python dependencies
-        if: ${{ env.skip_news_worker != 'true' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
-          python -m pip install -r requirements.txt
-
-      - name: Create at most one private news draft
-        if: ${{ env.skip_news_worker != 'true' }}
-        run: python -m app.worker
-
+      # Monitoring only: candidates are queued with source URLs. No upload happens
+      # until the news script can include specific verified facts and is reviewed.
       # Public publishing remains disabled. No artifact uploads are used.
