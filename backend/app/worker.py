@@ -32,6 +32,7 @@ def run_once() -> dict:
 
     plan = None
     temp_assets = None
+    media_source = "pre_generated_assets"
     try:
         plan = build_short_plan(job["topic"])
         images = _existing_scene_images()
@@ -41,13 +42,29 @@ def run_once() -> dict:
             prompts = [scene["visual_prompt"] for scene in plan["scenes"]]
             try:
                 images = asyncio.run(generate_scene_images(prompts, temp_assets.name))
-            except Exception as exc:
-                message = f"{BLOCKED_REASON} Provider detail: {type(exc).__name__}: {exc}"
-                update_job_status(
-                    job["id"], "blocked", error=message,
-                    result={"plan": plan, "media_created": False, "youtube_upload": None},
-                )
-                return {"state": "blocked", "job_id": job["id"], "reason": message}
+                media_source = "ai_horde"
+            except Exception as provider_exc:
+                # Shared-provider throttling should not block the entire video.
+                # Fall back to a deterministic, no-cost illustrated brand asset set.
+                from app.fallback_art import generate_fallback_scene_images
+                try:
+                    images = generate_fallback_scene_images(temp_assets.name)
+                    media_source = "local_branded_fallback"
+                    print(
+                        "Image provider unavailable; continuing with local branded "
+                        f"fallback. Provider error: {type(provider_exc).__name__}: {provider_exc}"
+                    )
+                except Exception as fallback_exc:
+                    message = (
+                        f"{BLOCKED_REASON} Provider detail: {type(provider_exc).__name__}: "
+                        f"{provider_exc}. Local fallback also failed: "
+                        f"{type(fallback_exc).__name__}: {fallback_exc}"
+                    )
+                    update_job_status(
+                        job["id"], "blocked", error=message,
+                        result={"plan": plan, "media_created": False, "youtube_upload": None},
+                    )
+                    return {"state": "blocked", "job_id": job["id"], "reason": message}
 
         from app.pipeline import build_private_draft
         pipeline_result = asyncio.run(build_private_draft(job["topic"], images))
@@ -61,6 +78,7 @@ def run_once() -> dict:
         result = {
             "plan": plan,
             "media_created": True,
+            "media_source": media_source,
             "youtube_upload": {
                 "video_id": pipeline_result["video_id"],
                 "privacy_status": "private",
