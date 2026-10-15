@@ -165,8 +165,17 @@ class _SearchClient:
     def get(self, url, **kwargs):
         assert url == COMMONS_API
         self.queries.append(kwargs["params"]["gsrsearch"])
-        query = kwargs["params"]["gsrsearch"].removesuffix(" filemime:video")
-        return _SearchResponse(self.pages_by_query.get(query, {}))
+        query = kwargs["params"]["gsrsearch"].removesuffix(" filemime:video").strip().casefold()
+        normalized = {str(key).strip().casefold(): value for key, value in self.pages_by_query.items()}
+        if query in normalized:
+            return _SearchResponse(normalized[query])
+        # Commons search is fuzzy; let fixtures model results for a matching topic term
+        # even when the query is a different combination of those words.
+        query_terms = set(query.split())
+        for key, pages in normalized.items():
+            if query_terms and query_terms.issubset(set(key.split())):
+                return _SearchResponse(pages)
+        return _SearchResponse({})
 
 
 def _video_page(title, *, license_name="CC BY-SA 4.0", description="", size=10000):
