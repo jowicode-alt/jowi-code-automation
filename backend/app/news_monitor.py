@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import hashlib
+import html
 import json
 import os
 import re
@@ -79,18 +80,31 @@ def parse_feed(xml_text: str, source_name: str, feed_url: str) -> list[dict]:
                 link = child.attrib.get("href") or (child.text or "").strip()
                 if child.attrib.get("rel", "alternate") == "alternate":
                     fields["link"] = link
-            elif name in {"title", "pubdate", "published", "updated", "date"}:
-                fields[name] = (child.text or "").strip()
+            elif name in {"title", "pubdate", "published", "updated", "date", "description", "summary", "encoded"}:
+                # RSS descriptions often contain the only accessible publisher-written
+                # article summary. Keep it bounded and strip markup before storage.
+                raw = "".join(child.itertext()).strip()
+                if name in {"description", "summary", "encoded"}:
+                    raw = re.sub(r"<[^>]+>", " ", html.unescape(raw))
+                    raw = " ".join(raw.split())
+                    fields[name] = raw[:3000]
+                else:
+                    fields[name] = raw
         title = fields.get("title", "").strip()
         link = fields.get("link", "").strip()
         if not title or not link or not link.startswith(("https://", "http://")):
             continue
         published = fields.get("pubdate") or fields.get("published") or fields.get("updated") or fields.get("date") or ""
+        summary = fields.get("description") or fields.get("summary") or fields.get("encoded") or ""
+        # Do not let a bare duplicate headline masquerade as article-level evidence.
+        if summary.strip().lower() == title.strip().lower():
+            summary = ""
         items.append({
             "title": title[:240],
             "url": link[:2000],
             "source": source_name,
             "feed_url": feed_url,
+            "summary": summary[:3000],
             "published_at": _parse_date(published).isoformat(),
         })
     return items
