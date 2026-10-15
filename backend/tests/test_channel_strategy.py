@@ -2,21 +2,29 @@ from app.content import build_short_plan
 from app.news_monitor import parse_feed, _similarity
 
 
-def test_category_planner_keeps_storytelling_only_for_money_and_psychology():
-    money = build_short_plan("Why habits shape wealth", category="money_success")
-    psychology = build_short_plan("Why people procrastinate", category="psychology")
+def test_category_planner_supports_only_current_editorial_categories():
     comedy = build_short_plan("When the meeting could have been an email", category="comedy")
     tech = build_short_plan("A practical AI workflow", category="ai_technology")
+    entertainment = build_short_plan("A new streaming release", category="entertainment")
     news = build_short_plan("Example international development", category="breaking_news")
-
-    assert money["category"] == "money_success"
-    assert psychology["category"] == "psychology"
-    assert "story" not in comedy["presentation"].lower()
+    assert comedy["category"] == "comedy"
     assert "screen" in tech["presentation"].lower()
+    assert entertainment["category"] == "entertainment"
     assert news["requires_source_review"] is True
     assert news["source_review_ready"] is False
-    assert all(len(plan["scenes"]) == 4 for plan in (money, psychology, comedy, tech, news))
-    assert all(plan["publishing_enabled"] is False for plan in (money, psychology, comedy, tech, news))
+    assert all(len(plan["scenes"]) == 4 for plan in (comedy, tech, entertainment, news))
+    assert all(plan["publishing_enabled"] is False for plan in (comedy, tech, entertainment, news))
+    assert all("black male lion" not in scene["visual_prompt"].lower() for plan in (comedy, tech, entertainment, news) for scene in plan["scenes"])
+
+
+def test_removed_categories_are_rejected():
+    for category in ("money_success", "psychology"):
+        try:
+            build_short_plan("Example topic", category=category)
+        except ValueError as error:
+            assert "Unsupported content category" in str(error)
+        else:
+            raise AssertionError(f"Removed category {category} was accepted")
 
 
 def test_rss_parser_handles_rss_and_atom_links():
