@@ -90,7 +90,7 @@ CATEGORY_POLICIES = {
 
 # These are candidate local-time slots, not a live scheduler. News has no fixed
 # upload cap, but every candidate must pass the editorial and deduplication gates.
-NEWS_POLL_INTERVAL_MINUTES = 15
+NEWS_POLL_INTERVAL_MINUTES = 30
 LOCAL_TIMEZONE = "Africa/Kampala"
 SHORTS_DAILY_BASELINE = 2
 SHORTS_DAILY_TARGET = 3
