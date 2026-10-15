@@ -160,8 +160,8 @@ def get_job(job_id: str) -> dict | None:
 
 
 
-def claim_next_job() -> dict | None:
-    """Claim one queued job, recovering jobs abandoned by a crashed worker.
+def claim_next_job(job_type: str | None = None) -> dict | None:
+    """Claim one queued job, optionally restricted to a category.
 
     Jobs running for over 45 minutes are re-queued before a new claim. This exceeds
     the current 20-minute worker workflow timeout and avoids permanently stuck jobs.
@@ -181,13 +181,23 @@ def claim_next_job() -> dict | None:
                 "running", stale_before,
             ),
         )
-        row = db.execute(
-            _query(
-                "SELECT id FROM jobs WHERE status = ? ORDER BY created_at_utc ASC LIMIT 1",
-                is_postgres,
-            ),
-            ("queued",),
-        ).fetchone()
+        if job_type:
+            row = db.execute(
+                _query(
+                    "SELECT id FROM jobs WHERE status = ? AND job_type = ? "
+                    "ORDER BY created_at_utc ASC LIMIT 1",
+                    is_postgres,
+                ),
+                ("queued", job_type),
+            ).fetchone()
+        else:
+            row = db.execute(
+                _query(
+                    "SELECT id FROM jobs WHERE status = ? ORDER BY created_at_utc ASC LIMIT 1",
+                    is_postgres,
+                ),
+                ("queued",),
+            ).fetchone()
         if row is None:
             return None
         job_id = row[0]
