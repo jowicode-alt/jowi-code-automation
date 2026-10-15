@@ -311,7 +311,7 @@ def test_worker_completes_only_after_pipeline_confirms_private_upload(monkeypatc
         "/api/jobs", json={"topic": "Build discipline"}, headers=HEADERS
     ).json()
 
-    async def fake_pipeline(topic, scene_images):
+    async def fake_pipeline(topic, scene_images, category=None):
         assert len(scene_images) == 4
         return {
             "video_id": "confirmed-private-id",
