@@ -187,14 +187,19 @@ def _video_page(title, *, license_name="CC BY-SA 4.0", description="", size=1000
 
 
 def test_video_search_tries_broader_queries_and_finds_relevant_free_video():
+    pages = {
+        "1": _video_page("File:Earthquake rescue operation.webm", description="Rescue operation after earthquake"),
+        "2": _video_page("File:Beautiful city skyline.webm", description="City skyline at sunset"),
+        "3": _video_page("File:Earthquake footage.webm", license_name="CC BY-NC 4.0", description="Earthquake response"),
+        "4": _video_page("File:Earthquake unrelated.webm", description="Earthquake", size=50 * 1024 * 1024),
+    }
     client = _SearchClient({
         "Major earthquake destroys city": {},
-        "major earthquake": {
-            "1": _video_page("File:Earthquake rescue operation.webm", description="Rescue operation after earthquake"),
-            "2": _video_page("File:Beautiful city skyline.webm", description="City skyline at sunset"),
-            "3": _video_page("File:Earthquake footage.webm", license_name="CC BY-NC 4.0", description="Earthquake response"),
-            "4": _video_page("File:Earthquake unrelated.webm", description="Earthquake", size=50 * 1024 * 1024),
-        },
+        "major earthquake destroys": {},
+        "major earthquake": pages,
+        "major": {},
+        "earthquake": pages,
+        "quake disaster": pages,
     })
     results = _video_results("Major earthquake destroys city", client)
     assert any("Earthquake rescue operation" in item["title"] for item in results)
