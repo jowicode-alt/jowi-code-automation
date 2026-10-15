@@ -169,13 +169,14 @@ class _SearchClient:
         normalized = {str(key).strip().casefold(): value for key, value in self.pages_by_query.items()}
         if query in normalized:
             return _SearchResponse(normalized[query])
-        # Commons search is fuzzy; let fixtures model results for a matching topic term
-        # even when the query is a different combination of those words.
+        # Commons search is fuzzy and can return a result for only one meaningful
+        # topic word; merge matching fixture pages to model that behavior consistently.
         query_terms = set(query.split())
+        matched_pages = {}
         for key, pages in normalized.items():
-            if query_terms and query_terms.issubset(set(key.split())):
-                return _SearchResponse(pages)
-        return _SearchResponse({})
+            if query_terms & set(key.split()):
+                matched_pages.update(pages)
+        return _SearchResponse(matched_pages)
 
 
 def _video_page(title, *, license_name="CC BY-SA 4.0", description="", size=10000):
