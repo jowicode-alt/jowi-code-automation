@@ -165,19 +165,15 @@ class _SearchClient:
     def get(self, url, **kwargs):
         assert url == COMMONS_API
         self.queries.append(kwargs["params"]["gsrsearch"])
+        # This fake client models Commons' fuzzy search by making all fixture candidates
+        # available to the filtering/ranking stage regardless of which query found them.
+        all_pages = {}
+        for pages in self.pages_by_query.values():
+            all_pages.update(pages)
         query = kwargs["params"]["gsrsearch"].removesuffix(" filemime:video").strip().casefold()
-        normalized = {str(key).strip().casefold(): value for key, value in self.pages_by_query.items()}
-        if query in normalized:
-            return _SearchResponse(normalized[query])
-        # Commons search is fuzzy and can return a result for only one meaningful
-        # topic word; merge matching fixture pages to model that behavior consistently.
-        query_terms = set(query.split())
-        matched_pages = {}
-        for key, pages in normalized.items():
-            if query_terms & set(key.split()):
-                matched_pages.update(pages)
-        return _SearchResponse(matched_pages)
-
+        if not query:
+            return _SearchResponse({})
+        return _SearchResponse(all_pages)
 
 def _video_page(title, *, license_name="CC BY-SA 4.0", description="", size=10000):
     return {
