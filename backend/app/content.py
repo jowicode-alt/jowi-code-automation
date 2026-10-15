@@ -116,6 +116,15 @@ def build_short_plan(topic: str, category: str | None = None) -> dict:
     selected, clean_topic = _category(topic, category)
     policy = CATEGORY_POLICIES[selected]
     title = clean_topic[:90]
+    sources = []
+    if selected == "breaking_news":
+        try:
+            from app.news_monitor import sources_for_topic
+            sources = sources_for_topic(clean_topic)
+        except Exception:
+            # Planning must remain available locally, but an empty source list is
+            # an explicit review blocker for any news draft.
+            sources = []
     scenes = [
         {
             "number": index,
@@ -138,5 +147,7 @@ def build_short_plan(topic: str, category: str | None = None) -> dict:
         "generation_status": "plan_only_provider_not_configured",
         "publishing_enabled": False,
         "requires_source_review": selected == "breaking_news",
+        "source_review_ready": selected != "breaking_news" or len(sources) >= 2,
+        "sources": sources,
         "copyright_safeguard": "Use original or appropriately licensed visuals and audio; do not copy third-party video or article text.",
     }
