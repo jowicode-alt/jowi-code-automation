@@ -336,11 +336,13 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
             break
 
     results = []
+    rejection_counts = {"not_video": 0, "restricted_license": 0, "unapproved_license": 0, "irrelevant": 0, "invalid_size": 0}
     for page, matched_query in candidates_by_title.values():
         info = (page.get("imageinfo") or [{}])[0]
         url = info.get("url", "")
         mime = str(info.get("mime", "")).lower()
         if not url.lower().split("?", 1)[0].endswith(VIDEO_EXTENSIONS) and not mime.startswith("video/"):
+            rejection_counts["not_video"] += 1
             continue
         metadata = info.get("extmetadata") or {}
         license_name = re.sub(r"<[^>]+>", " ", str(metadata.get("LicenseShortName", {}).get("value", "")))
@@ -354,8 +356,10 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
             or bool(re.search(r"(?:^|[-\s])(?:nc|nd)(?:[-\s]|$)", license_lower))
         )
         if not license_name or restricted_license:
+            rejection_counts["restricted_license"] += 1
             continue
         if not any(allowed.lower() in license_lower for allowed in ALLOWED_LICENSES):
+            rejection_counts["unapproved_license"] += 1
             continue
         description = re.sub(r"<[^>]+>", " ", str(metadata.get("ImageDescription", {}).get("value", "")))
         description = " ".join(unescape(description).split())
@@ -363,12 +367,14 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
         description_terms = set(re.findall(r"[a-z0-9]{3,}", description.lower()))
         matched_terms = set(expanded_terms) & (title_terms | description_terms)
         if not matched_terms:
+            rejection_counts["irrelevant"] += 1
             continue
         try:
             size = int(info.get("size", 0) or 0)
         except (TypeError, ValueError):
             size = 0
         if size <= 0 or size > MAX_VIDEO_BYTES:
+            rejection_counts["invalid_size"] += 1
             continue
         # Rank files by topic overlap, preferring specific matches over generic B-roll.
         score = len(set(expanded_terms) & title_terms) * 3 + len(set(expanded_terms) & description_terms)
@@ -382,6 +388,8 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
             "_relevance": score,
             "_matched_query": matched_query,
         })
+    if not results and candidates_by_title:
+        print(f"Wikimedia Commons returned {len(candidates_by_title)} candidates but none passed validation: {rejection_counts}", flush=True)
     results.sort(key=lambda item: item["_relevance"], reverse=True)
     for item in results:
         item.pop("_relevance", None)
