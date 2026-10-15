@@ -142,3 +142,73 @@ def test_commons_403_is_reported_without_bypassing_access_denial():
     client = _CommonsClient(status_code=403)
     with pytest.raises(RuntimeError, match="Wikimedia Commons denied the API request"):
         _video_results("ships near strait", client)
+
+
+class _SearchResponse:
+    status_code = 200
+
+    def __init__(self, pages):
+        self.pages = pages
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return {"query": {"pages": self.pages}}
+
+
+class _SearchClient:
+    def __init__(self, pages_by_query):
+        self.pages_by_query = pages_by_query
+        self.queries = []
+
+    def get(self, url, **kwargs):
+        assert url == COMMONS_API
+        self.queries.append(kwargs["params"]["gsrsearch"])
+        query = kwargs["params"]["gsrsearch"].removesuffix(" filemime:video")
+        return _SearchResponse(self.pages_by_query.get(query, {}))
+
+
+def _video_page(title, *, license_name="CC BY-SA 4.0", description="", size=10000):
+    return {
+        "title": title,
+        "imageinfo": [{
+            "url": "https://upload.wikimedia.org/example.webm",
+            "mime": "video/webm",
+            "size": size,
+            "descriptionurl": "https://commons.wikimedia.org/wiki/" + title.replace(" ", "_"),
+            "extmetadata": {
+                "LicenseShortName": {"value": license_name},
+                "Artist": {"value": "Creator"},
+                "ImageDescription": {"value": description},
+            },
+        }],
+    }
+
+
+def test_video_search_tries_broader_queries_and_finds_relevant_free_video():
+    client = _SearchClient({
+        "major earthquake destroys city": {},
+        "earthquake destroys city": {
+            "1": _video_page("File:Earthquake rescue operation.webm", description="Rescue operation after earthquake"),
+            "2": _video_page("File:Beautiful city skyline.webm", description="City skyline at sunset"),
+            "3": _video_page("File:Earthquake footage.webm", license_name="CC BY-NC 4.0", description="Earthquake response"),
+            "4": _video_page("File:Earthquake unrelated.webm", description="Earthquake", size=50 * 1024 * 1024),
+        },
+    })
+    results = _video_results("Major earthquake destroys city", client)
+    assert any("Earthquake rescue operation" in item["title"] for item in results)
+    assert all("skyline" not in item["title"] for item in results)
+    assert all("BY-NC" not in item["license"] for item in results)
+    assert all(item["size"] <= 35 * 1024 * 1024 for item in results)
+    assert len(client.queries) >= 2
+
+
+def test_video_search_does_not_accept_unknown_licence_or_unrelated_video():
+    client = _SearchClient({
+        "election protest": {
+            "1": _video_page("File:Election rally.webm", license_name="", description="Election rally"),
+            "2": _video_page("File:Ocean waves.webm", description="Ocean waves"),
+        },
+    })
+    assert _video_results("Election protest", client) == []
