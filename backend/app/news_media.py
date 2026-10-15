@@ -461,7 +461,7 @@ def build_broll_package(topic: str, category: str, output_dir: str) -> dict:
     }
     if category not in category_terms:
         raise ValueError(f"Unsupported B-roll category: {category}")
-    search_topic = f"{topic} {category_terms[category]}"
+    # Lead with category vocabulary so Commons can return usable B-roll even when its file titles do not repeat the exact topic headline.\n    search_topic = f"{category_terms[category]} {topic}"
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
     with httpx.Client(timeout=httpx.Timeout(20.0, connect=8.0), follow_redirects=True) as client:
