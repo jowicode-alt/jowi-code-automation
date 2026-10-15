@@ -81,8 +81,11 @@ jobs:
           job = get_job(job_id)
           if job is None:
               raise SystemExit("Refusing to re-queue: test job was not found in the configured database.")
-          if job["status"] != "blocked":
-              raise SystemExit(f"Refusing to re-queue: expected status 'blocked', found {job['status']!r}.")
+          if job["status"] not in {"blocked", "failed"}:
+              raise SystemExit(
+                  "Refusing to re-queue: expected status 'blocked' or 'failed', "
+                  f"found {job['status']!r}."
+              )
           updated = update_job_status(job_id, "queued", error=None)
           if not updated or updated["status"] != "queued":
               raise SystemExit("Re-queue could not be verified.")
