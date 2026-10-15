@@ -8,7 +8,9 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] Checks-only workflow runs pytest and does not upload artifacts.
 - [x] Latest verified CI run #85 passed; see https://github.com/jowicode-alt/jowi-code-automation/actions/runs/38637036727.
 - [x] Image signature validation, anonymous-versus-registered sharing mode, worker planning failure handling, and partial AI Horde submission cleanup have regression tests.
-- [x] Added a manual-only private worker workflow; it has no cron schedule, no artifact upload, and requires the operator to type PRIVATE before a single job can be processed.
+- [x] Added a manual-only private worker workflow; it has no artifact upload and requires the operator to type PRIVATE before a single normal job can be processed.
+- [x] Added a separate scheduled RSS news monitor (every 30 minutes) with cross-publisher headline matching and queue deduplication; it does not upload videos.
+- [ ] Configure `JOWI_DATABASE_URL` and verify a successful scheduled news-monitor run.
 - [ ] Verify the new workflow's GitHub Actions syntax and behavior in a controlled run after required secrets and a queued test job exist.
 - [x] Android source messaging now accurately says queueing does not automatically start the manual worker; source has not yet been compiled or device-tested.
 
@@ -20,7 +22,9 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] Worker re-queues jobs left running for over 45 minutes, with a regression test; the threshold exceeds the current 20-minute workflow timeout.
 - [x] Lifecycle transitions are validated; blocked/failed jobs can be explicitly re-queued.
 - [x] PostgreSQL adapter for hosted queue state; SQLite is local-development fallback only.
-- [x] Brand-safe script and scene-prompt planner.
+- [x] Category-aware script and scene-prompt planner for news, AI/technology, comedy, entertainment, money/success, and psychology.
+- [x] News candidates bypass the regular daily queue cap and duplicate exact headlines are suppressed for 48 hours.
+- [ ] Implement fact-grounded news summarization and source verification before any automatic draft/upload step.
 - [x] Voiceover generation endpoint and authenticated audio download.
 - [x] FFmpeg vertical MP4 renderer function.
 - [x] Pipeline function connects narration, rendering, and private-only YouTube upload; tested with mocked providers.
@@ -31,7 +35,8 @@ Items marked complete have been implemented or verified; they do not imply that 
 - [x] Render blueprint aligned with active backend variables; auto-deploy remains disabled.
 - [x] Render account inspection found no Jowi Code service or database; existing services and database belong to the separate Forex project and are not reused.
 - [x] Deploy to Render free tier and verify the public health endpoint; free-tier sleep/resource limitations still apply.
-- [ ] Configure an automatic schedule only after durable storage, real-media generation, and private-upload tests pass.
+- [ ] Configure automatic regular-video scheduling only after durable storage, real-media generation, and private-upload tests pass.
+- [ ] Implement YouTube Analytics read access and a tested, reversible performance optimization loop.
 
 ### Manual worker setup (not yet configured)
 The GitHub Actions workflow `.github/workflows/private-worker.yml` is manual-only. It processes at most one already-queued job and uploads only with YouTube privacy set to PRIVATE. Before use, configure repository Actions secrets:
@@ -51,6 +56,7 @@ The workflow is deliberately not scheduled and cannot create a working queue by 
 ## YouTube
 - [x] Upload adapter restricted to private uploads.
 - [ ] Configure YouTube OAuth consent and refresh token securely.
+- [ ] Obtain owner-approved `yt-analytics.readonly` OAuth scope for read-only performance analysis.
 - [ ] Test a real private upload with owner-approved credentials.
 - [ ] Verify quota, metadata, duplicate prevention, and retries.
 - [ ] Add an owner-reviewed route to public scheduling only after approval.
