@@ -7,6 +7,14 @@ on:
         description: "Type PRIVATE to allow one queued job to be uploaded privately to YouTube"
         required: true
         type: string
+      job_category:
+        description: "Choose which queued job type to process"
+        required: true
+        type: choice
+        options:
+          - all
+          - breaking_news
+        default: all
       retry_blocked_job_id:
         description: "Optional: re-queue only the previously blocked discipline test job"
         required: false
@@ -37,6 +45,7 @@ jobs:
       TTS_VOICE: en-US-GuyNeural
       TTS_RATE: -5%
       TTS_PITCH: -8Hz
+      JOB_CATEGORY_INPUT: ${{ inputs.job_category }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -92,5 +101,15 @@ jobs:
           print(f"Re-queued existing job {job_id} without creating a duplicate.")
           PY
 
-      - name: Process at most one queued job
+      - name: Select the queued job category
+        shell: bash
+        run: |
+          if [[ "$JOB_CATEGORY_INPUT" == "breaking_news" ]]; then
+            echo "JOB_CATEGORY_FILTER=breaking_news" >> "$GITHUB_ENV"
+            echo "This run will process only a breaking-news candidate."
+          else
+            echo "This run may process any queued job."
+          fi
+
+      - name: Process queued job
         run: python -m app.worker
