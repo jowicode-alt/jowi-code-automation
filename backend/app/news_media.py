@@ -15,7 +15,7 @@ from urllib.parse import quote
 import httpx
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
-USER_AGENT = "TheJowiCodeNewsBot/1.0 (https://github.com/jowicode-alt/jowi-code-automation) httpx"
+USER_AGENT = "TheJowiCodeNewsBot/1.0 (https://github.com/jowicode-alt/jowi-code-automation; contact: https://github.com/jowicode-alt/jowi-code-automation/issues) httpx"
 VIDEO_EXTENSIONS = (".webm", ".ogv", ".ogg", ".mp4", ".mov")
 ALLOWED_LICENSES = ("CC0", "Public domain", "CC BY", "CC BY-SA", "Creative Commons Attribution")
 MAX_VIDEO_BYTES = 35 * 1024 * 1024
@@ -279,9 +279,11 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
             unique_queries.append(query)
 
     candidates_by_title = {}
-    for query in unique_queries[:5]:
+    for query_index, query in enumerate(unique_queries[:5]):
+        if query_index:
+            time.sleep(0.25)
         params = {
-            "action": "query", "format": "json", "generator": "search",
+            "action": "query", "format": "json", "maxlag": 5, "generator": "search",
             "gsrsearch": f"{query} filemime:video", "gsrnamespace": 6,
             "gsrlimit": 30, "prop": "imageinfo",
             "iiprop": "url|extmetadata|mime|size",
