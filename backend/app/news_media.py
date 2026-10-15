@@ -164,6 +164,22 @@ def _script(topic: str, sources: list[dict], facts: list[str], client: httpx.Cli
         "dry_run": False,
     }
     response = client.post(f"{base_url}/v2/generate/text/async", headers=headers, json=payload)
+    # A stale or restricted configured key can be rejected before a request is queued.
+    # Retry exactly once with AI Horde's documented anonymous key; this remains free,
+    # though it may have lower priority or be restricted during provider high load.
+    if response.status_code in {401, 403} and api_key != "0000000000":
+        print(
+            f"AI Horde rejected configured credentials (HTTP {response.status_code}); "
+            "retrying once with the documented anonymous key.",
+            flush=True,
+        )
+        headers = {**headers, "apikey": "0000000000"}
+        response = client.post(f"{base_url}/v2/generate/text/async", headers=headers, json=payload)
+    if response.status_code in {401, 403}:
+        raise RuntimeError(
+            f"AI Horde denied text generation (HTTP {response.status_code}); "
+            "the configured key may be invalid/restricted, or anonymous access may be blocked."
+        )
     response.raise_for_status()
     request_id = response.json().get("id")
     if not request_id:
