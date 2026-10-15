@@ -5,7 +5,10 @@ import uuid
 
 from app.content import build_short_plan
 from app.render import render_news_short, render_short
-from app.voice import generate_voiceover_with_boundaries
+from app.voice import generate_voiceover, generate_voiceover_with_boundaries
+
+# Keep the legacy symbol available for existing tests and integrations that monkeypatch it.
+_DEFAULT_GENERATE_VOICEOVER = generate_voiceover
 from app.youtube import upload_video_private
 
 
@@ -40,7 +43,12 @@ async def build_private_draft(
     audio_path = directory / f"{run_id}.mp3"
     video_path = directory / f"{run_id}.mp4"
     try:
-        _, word_boundaries = await generate_voiceover_with_boundaries(narration, str(audio_path))
+        if generate_voiceover is _DEFAULT_GENERATE_VOICEOVER:
+            _, word_boundaries = await generate_voiceover_with_boundaries(narration, str(audio_path))
+        else:
+            # Preserve compatibility with test doubles and integrations patching the legacy API.
+            await generate_voiceover(narration, str(audio_path))
+            word_boundaries = None
         if news_package:
             await asyncio.to_thread(
                 render_news_short, news_package["clips"], str(audio_path), str(video_path), narration, word_boundaries
