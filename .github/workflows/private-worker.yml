@@ -7,6 +7,11 @@ on:
         description: "Type PRIVATE to allow one queued job to be uploaded privately to YouTube"
         required: true
         type: string
+      retry_blocked_job_id:
+        description: "Optional: re-queue only the previously blocked discipline test job"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -59,6 +64,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
           python -m pip install -r requirements.txt
+
+      - name: Re-queue the specific blocked test job if requested
+        if: ${{ inputs.retry_blocked_job_id != '' }}
+        env:
+          RETRY_BLOCKED_JOB_ID: ${{ inputs.retry_blocked_job_id }}
+        run: |
+          python - <<'PY'
+          import os
+          from app.jobs import get_job, update_job_status
+
+          expected_id = "4679ab92-9fcb-45f7-8aa2-0e5ccebe00b2"
+          job_id = os.environ["RETRY_BLOCKED_JOB_ID"].strip()
+          if job_id != expected_id:
+              raise SystemExit("Refusing to re-queue: only the known blocked test job is allowed.")
+          job = get_job(job_id)
+          if job is None:
+              raise SystemExit("Refusing to re-queue: test job was not found in the configured database.")
+          if job["status"] != "blocked":
+              raise SystemExit(f"Refusing to re-queue: expected status 'blocked', found {job['status']!r}.")
+          updated = update_job_status(job_id, "queued", error=None)
+          if not updated or updated["status"] != "queued":
+              raise SystemExit("Re-queue could not be verified.")
+          print(f"Re-queued existing job {job_id} without creating a duplicate.")
+          PY
 
       - name: Process at most one queued job
         run: python -m app.worker
