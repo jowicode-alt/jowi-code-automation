@@ -188,8 +188,8 @@ def _video_page(title, *, license_name="CC BY-SA 4.0", description="", size=1000
 
 def test_video_search_tries_broader_queries_and_finds_relevant_free_video():
     client = _SearchClient({
-        "major earthquake destroys city": {},
-        "earthquake destroys city": {
+        "Major earthquake destroys city": {},
+        "major earthquake": {
             "1": _video_page("File:Earthquake rescue operation.webm", description="Rescue operation after earthquake"),
             "2": _video_page("File:Beautiful city skyline.webm", description="City skyline at sunset"),
             "3": _video_page("File:Earthquake footage.webm", license_name="CC BY-NC 4.0", description="Earthquake response"),
