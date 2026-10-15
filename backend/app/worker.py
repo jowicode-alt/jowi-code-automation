@@ -116,4 +116,14 @@ def run_once(category_filter: str | None = None) -> dict:
 
 if __name__ == "__main__":
     import json
-    print(json.dumps(run_once(os.getenv("JOB_CATEGORY_FILTER") or None), ensure_ascii=False))
+    category_filter = os.getenv("JOB_CATEGORY_FILTER") or None
+    # Drain a few already-verified news candidates per scheduled run. There is no
+    # daily news quota; this bound protects the free runner from one huge burst.
+    max_jobs = 3 if category_filter == "breaking_news" else 1
+    outcomes = []
+    for _ in range(max_jobs):
+        outcome = run_once(category_filter)
+        outcomes.append(outcome)
+        if outcome.get("state") == "idle":
+            break
+    print(json.dumps({"processed": len(outcomes), "outcomes": outcomes}, ensure_ascii=False))
