@@ -105,7 +105,7 @@ def build_short_plan(topic: str, category: str | None = None) -> dict:
         "presentation": policy.format,
         "title": clean_topic[:90],
         "topic": clean_topic,
-        "voice": "Deep male voiceover; clear, natural delivery; readable captions burned into the video.",
+        "voice": "Deep male voiceover; clear, natural delivery; no on-screen captions in generated imagery; readable captions burned into the final video.",
         "narration": _narration(selected, clean_topic),
         "scenes": scenes,
         "generation_status": "plan_only_provider_not_configured",
