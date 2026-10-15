@@ -61,44 +61,52 @@ async def generate_scene_images(
 
     async with httpx.AsyncClient(timeout=request_timeout, follow_redirects=True) as client:
         async def submit(index: int, prompt: str) -> tuple[int, str]:
-            response = await client.post(
-                f"{BASE_URL}/v2/generate/async",
-                headers=headers,
-                json={
-                    "prompt": prompt + " ### text, captions, watermark, extra limbs, blurry, low quality",
-                    "params": {
-                        "width": 512,
-                        "height": 768,
-                        "steps": 20,
-                        "n": 1,
-                        "cfg_scale": 7,
-                    },
-                    "models": [model],
-                    "nsfw": False,
-                    "censor_nsfw": True,
-                    "r2": True,
-                    "shared": _is_anonymous(headers),
-                    "dry_run": False,
+            payload = {
+                "prompt": prompt + " ### text, captions, watermark, extra limbs, blurry, low quality",
+                "params": {
+                    "width": 512,
+                    "height": 768,
+                    "steps": 20,
+                    "n": 1,
+                    "cfg_scale": 7,
                 },
-            )
+                "models": [model],
+                "nsfw": False,
+                "censor_nsfw": True,
+                "r2": True,
+                "shared": _is_anonymous(headers),
+                "dry_run": False,
+            }
+            response = None
+            for attempt in range(4):
+                response = await client.post(
+                    f"{BASE_URL}/v2/generate/async", headers=headers, json=payload
+                )
+                if response.status_code != 429 or attempt == 3:
+                    break
+                retry_after = response.headers.get("Retry-After", "").strip()
+                try:
+                    delay = float(retry_after)
+                except ValueError:
+                    delay = 2 ** (attempt + 1)
+                await asyncio.sleep(min(max(delay, 1.0), 30.0))
             response.raise_for_status()
             request_id = response.json().get("id")
             if not request_id:
                 raise RuntimeError("AI Horde did not return a generation ID")
             return index, str(request_id)
 
-        submission_results = await asyncio.gather(
-            *(submit(index, prompt) for index, prompt in enumerate(prompts, start=1)),
-            return_exceptions=True,
-        )
-        submitted = [result for result in submission_results if not isinstance(result, BaseException)]
-        submission_errors = [
-            result for result in submission_results if isinstance(result, BaseException)
-        ]
-        pending = dict(submitted)
-        if submission_errors:
-            # Some requests may have been accepted even if another submission failed.
-            # Cancel every accepted request before surfacing the original error.
+        # Submit sequentially: simultaneous requests commonly trigger HTTP 429 on
+        # shared volunteer services. A bounded Retry-After-aware retry is used above.
+        pending: dict[int, str] = {}
+        try:
+            for index, prompt in enumerate(prompts, start=1):
+                submitted_index, request_id = await submit(index, prompt)
+                pending[submitted_index] = request_id
+                if index < len(prompts):
+                    await asyncio.sleep(1.5)
+        except Exception:
+            # Cancel already accepted requests before surfacing the submission error.
             await asyncio.gather(
                 *(
                     client.post(
@@ -109,7 +117,7 @@ async def generate_scene_images(
                 ),
                 return_exceptions=True,
             )
-            raise submission_errors[0]
+            raise
         image_urls: dict[int, str] = {}
         try:
             while pending:
