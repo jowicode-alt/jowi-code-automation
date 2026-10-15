@@ -74,3 +74,28 @@ def test_news_script_retries_once_with_anonymous_key_after_403(monkeypatch):
     narration = _script("Test event", sources, ["fact one", "fact two", "fact three"], horde)
     assert len(narration.split()) >= 75
     assert horde.keys == ["configured-key", "0000000000"]
+
+
+
+class _AlwaysForbiddenHorde(_FakeHorde):
+    def __init__(self):
+        self.keys = []
+
+    def post(self, *args, **kwargs):
+        self.keys.append(kwargs["headers"]["apikey"])
+        return _Response({"message": "access forbidden"}, status_code=403)
+
+
+def test_news_script_uses_sourced_fallback_if_both_horde_keys_are_forbidden(monkeypatch):
+    monkeypatch.setenv("AI_HORDE_API_KEY", "configured-key")
+    horde = _AlwaysForbiddenHorde()
+    sources = [
+        {"source": "Publisher A", "url": "https://example.com/a", "facts": ["Officials confirmed the city centre reopened after the overnight emergency response."]},
+        {"source": "Publisher B", "url": "https://example.com/b", "facts": ["A separate report says local authorities are continuing their investigation today."]},
+    ]
+    narration = _script("Test event", sources, ["fact one", "fact two", "fact three"], horde)
+    assert "Publisher A reports" in narration
+    assert "A separate report from Publisher B" in narration
+    assert "The Jowi Code" in narration
+    assert "Thanks for watching" in narration
+    assert horde.keys == ["configured-key", "0000000000"]
