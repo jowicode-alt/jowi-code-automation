@@ -279,16 +279,11 @@ def test_worker_returns_idle_when_queue_is_empty(monkeypatch, tmp_path):
 def test_worker_processes_only_one_job_per_invocation(monkeypatch, tmp_path):
     from app.jobs import get_job
     from app.worker import run_once
-    import app.image_provider as image_provider
+    import app.news_media as news_media
 
-    async def fake_image_generation(prompts, output_dir):
-        raise TimeoutError("simulated provider timeout")
-
-    monkeypatch.setattr(image_provider, "generate_scene_images", fake_image_generation)
-    import app.fallback_art as fallback_art
     monkeypatch.setattr(
-        fallback_art, "generate_fallback_scene_images",
-        lambda output_dir: (_ for _ in ()).throw(RuntimeError("simulated fallback failure")),
+        news_media, "build_broll_package",
+        lambda topic, category, output_dir: (_ for _ in ()).throw(RuntimeError("simulated footage unavailable")),
     )
     monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "one-at-a-time.sqlite3"))
     monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
