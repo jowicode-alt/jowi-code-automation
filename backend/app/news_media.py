@@ -100,34 +100,72 @@ def _fetch_reporting(sources: list[dict], client: httpx.Client) -> tuple[list[st
     return evidence, usable_sources
 
 
-def _script(topic: str, sources: list[dict], facts: list[str]) -> str:
-    # Select details across publishers rather than taking every sentence from one page.
-    unique = []
-    seen = set()
-    max_sentences = max((len(item.get("facts", [])) for item in sources), default=0)
-    for index in range(max_sentences):
-        for source in sources:
-            source_facts = source.get("facts", [])
-            if index >= len(source_facts):
-                continue
-            sentence = source_facts[index]
-            key = re.sub(r"[^a-z0-9]+", " ", sentence.lower()).strip()
-            if key and key not in seen:
-                seen.add(key)
-                unique.append(sentence)
-    if len(unique) < 3 or len(sources) < 2:
+def _script(topic: str, sources: list[dict], facts: list[str], client: httpx.Client) -> str:
+    """Ask the free AI Horde text-generation pool for an original, evidence-bounded script."""
+    if len(facts) < 3 or len(sources) < 2:
         raise RuntimeError("Not enough article-level evidence from two independent sources for a factual news script")
-    chosen = unique[:6]
-    outlet_names = list(dict.fromkeys(item["source"] for item in sources))
-    intro = f"Here is the developing story: {topic}. "
-    context = "Reporting from " + ", ".join(outlet_names[:3]) + " provides the following details. "
-    body = " ".join(chosen)
-    caution = (
-        "These are the details available in the linked reporting at the time this draft was prepared. "
-        "Information may change as the story develops, so check the original reports for updates. "
-        "Subscribe to The Jowi Code for clear, sourced news. Thanks for watching."
+    base_url = __import__("os").getenv("AI_HORDE_BASE_URL", "https://aihorde.net/api").rstrip("/")
+    api_key = __import__("os").getenv("AI_HORDE_API_KEY", "0000000000").strip() or "0000000000"
+    evidence = []
+    for source in sources:
+        evidence.append(f"Publisher: {source['source']}\nURL: {source['url']}\nReported details:\n- " + "\n- ".join(source["facts"]))
+    prompt = (
+        "Write an original spoken YouTube Shorts breaking-news script in clear international English. "
+        "Target 100 to 150 words. Use only facts explicitly supported by the source notes below. "
+        "Do not invent numbers, dates, names, causes, motives, quotes, or outcomes. Do not copy sentences "
+        "from the notes; paraphrase in original wording. Attribute disputed or uncertain details. If sources "
+        "disagree, explain that they differ rather than choosing one. Structure: what happened, the strongest "
+        "confirmed details, why it matters, what remains unknown, and a brief reminder that details may change. "
+        "End exactly with: Subscribe to The Jowi Code for clear, sourced news. Thanks for watching. "
+        "Return only the narration, with no heading, bullets, citations list, or production notes.\n\n"
+        f"Topic: {topic}\n\nSOURCE NOTES (evidence only, not text to copy):\n"
+        + "\n\n".join(evidence)
+        + "\n\nOriginal spoken script:"
     )
-    return intro + context + body + " " + caution
+    headers = {
+        "apikey": api_key,
+        "Client-Agent": "TheJowiCodeAutomation:0.1.0:github.com/jowicode-alt/jowi-code-automation",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "prompt": prompt,
+        "params": {
+            "max_length": 280,
+            "max_context_length": 4096,
+            "temperature": 0.35,
+            "top_p": 0.9,
+            "rep_pen": 1.08,
+        },
+        "nsfw": False,
+        "trusted_workers": False,
+        "slow_workers": False,
+        "dry_run": False,
+    }
+    response = client.post(f"{base_url}/v2/generate/text/async", headers=headers, json=payload)
+    response.raise_for_status()
+    request_id = response.json().get("id")
+    if not request_id:
+        raise RuntimeError("AI Horde did not return a text-generation request ID")
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        status_response = client.get(
+            f"{base_url}/v2/generate/text/status/{request_id}", headers=headers
+        )
+        status_response.raise_for_status()
+        status = status_response.json()
+        if status.get("faulted"):
+            raise RuntimeError("AI Horde text generation failed")
+        generations = status.get("generations") or []
+        if generations:
+            narration = " ".join(str(generations[0].get("text", "")).split()).strip().strip('"')
+            word_count = len(narration.split())
+            if word_count < 75 or word_count > 190:
+                raise RuntimeError(f"AI-generated news script has invalid length ({word_count} words)")
+            if "The Jowi Code" not in narration or "Thanks for watching" not in narration:
+                raise RuntimeError("AI-generated news script is missing the required channel sign-off")
+            return narration
+        time.sleep(3)
+    raise TimeoutError("AI Horde text generation did not finish within 180 seconds")
 
 
 def _video_results(topic: str, client: httpx.Client) -> list[dict]:
@@ -182,7 +220,7 @@ def build_news_package(topic: str, sources: list[dict], output_dir: str) -> dict
         facts, usable_sources = _fetch_reporting(sources, client)
         if len(usable_sources) < 2:
             raise RuntimeError("News blocked: could not retrieve article-level reporting from two independent publishers")
-        narration = _script(topic, usable_sources, facts)
+        narration = _script(topic, usable_sources, facts, client)
         candidates = _video_results(topic, client)
         if not candidates:
             raise RuntimeError("News blocked: no topic-matched Wikimedia Commons video with an accepted free license was found")
