@@ -5,7 +5,7 @@ import uuid
 
 from app.content import build_short_plan
 from app.render import render_news_short, render_short
-from app.voice import generate_voiceover
+from app.voice import generate_voiceover_with_boundaries
 from app.youtube import upload_video_private
 
 
@@ -40,13 +40,13 @@ async def build_private_draft(
     audio_path = directory / f"{run_id}.mp3"
     video_path = directory / f"{run_id}.mp4"
     try:
-        await generate_voiceover(narration, str(audio_path))
+        _, word_boundaries = await generate_voiceover_with_boundaries(narration, str(audio_path))
         if news_package:
             await asyncio.to_thread(
-                render_news_short, news_package["clips"], str(audio_path), str(video_path), narration
+                render_news_short, news_package["clips"], str(audio_path), str(video_path), narration, word_boundaries
             )
         else:
-            await asyncio.to_thread(render_short, scene_images, str(audio_path), str(video_path), narration)
+            await asyncio.to_thread(render_short, scene_images, str(audio_path), str(video_path), narration, word_boundaries)
 
         source_lines = [
             f'{source.get("source", "Source")}: {source.get("url", "")}'
