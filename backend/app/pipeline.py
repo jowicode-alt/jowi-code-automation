@@ -16,7 +16,7 @@ async def build_private_draft(
     category: str | None = None,
     news_package: dict | None = None,
 ) -> dict[str, str]:
-    """Create narration, render a vertical Short, and upload it as PRIVATE only.
+    """Create narration, captioned vertical video, and upload it as PRIVATE only.
 
     Breaking-news jobs must supply a source-reviewed package with licensed moving clips.
     """
@@ -42,9 +42,11 @@ async def build_private_draft(
     try:
         await generate_voiceover(narration, str(audio_path))
         if news_package:
-            await asyncio.to_thread(render_news_short, news_package["clips"], str(audio_path), str(video_path))
+            await asyncio.to_thread(
+                render_news_short, news_package["clips"], str(audio_path), str(video_path), narration
+            )
         else:
-            await asyncio.to_thread(render_short, scene_images, str(audio_path), str(video_path))
+            await asyncio.to_thread(render_short, scene_images, str(audio_path), str(video_path), narration)
 
         source_lines = [
             f'{source.get("source", "Source")}: {source.get("url", "")}'
