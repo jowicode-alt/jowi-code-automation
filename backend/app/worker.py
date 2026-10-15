@@ -24,9 +24,9 @@ def _existing_scene_images() -> list[str]:
     return [str(image) for image in images]
 
 
-def run_once() -> dict:
+def run_once(category_filter: str | None = None) -> dict:
     """Process one job; completion requires a confirmed private YouTube upload."""
-    job = claim_next_job()
+    job = claim_next_job(job_type=category_filter)
     if job is None:
         return {"state": "idle", "message": "No queued jobs."}
 
@@ -116,4 +116,4 @@ def run_once() -> dict:
 
 if __name__ == "__main__":
     import json
-    print(json.dumps(run_once(), ensure_ascii=False))
+    print(json.dumps(run_once(os.getenv("JOB_CATEGORY_FILTER") or None), ensure_ascii=False))
