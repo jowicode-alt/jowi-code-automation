@@ -2,8 +2,9 @@ from app.news_media import _ArticleText, _script
 
 
 class _Response:
-    def __init__(self, payload):
+    def __init__(self, payload, status_code=200):
         self.payload = payload
+        self.status_code = status_code
 
     def raise_for_status(self):
         return None
@@ -49,3 +50,27 @@ def test_news_script_uses_free_ai_horde_and_requires_signoff(monkeypatch):
     assert len(narration.split()) >= 75
     assert "The Jowi Code" in narration
     assert "Thanks for watching" in narration
+
+
+
+class _RejectedThenAnonymousHorde(_FakeHorde):
+    def __init__(self):
+        self.keys = []
+
+    def post(self, *args, **kwargs):
+        self.keys.append(kwargs["headers"]["apikey"])
+        if len(self.keys) == 1:
+            return _Response({"message": "credential rejected"}, status_code=403)
+        return _Response({"id": "test-request"}, status_code=200)
+
+
+def test_news_script_retries_once_with_anonymous_key_after_403(monkeypatch):
+    monkeypatch.setenv("AI_HORDE_API_KEY", "configured-key")
+    horde = _RejectedThenAnonymousHorde()
+    sources = [
+        {"source": "Publisher A", "url": "https://example.com/a", "facts": ["Fact one from a report."]},
+        {"source": "Publisher B", "url": "https://example.com/b", "facts": ["Fact two from a report."]},
+    ]
+    narration = _script("Test event", sources, ["fact one", "fact two", "fact three"], horde)
+    assert len(narration.split()) >= 75
+    assert horde.keys == ["configured-key", "0000000000"]
