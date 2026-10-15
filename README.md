@@ -2,8 +2,17 @@
 
 A phone-managed automation system for **The Jowi Code** YouTube channel.
 
-## Brand and targets
-- Target 2–3 Shorts per day; queue limit: three jobs per UTC day.
+## Channel strategy
+- Regular Shorts target: 2–3 per day, with candidate time slots by category.
+- International breaking news is event-driven and intended to be monitored continuously; no fixed news upload quota, but duplicate/materiality checks and source verification are required.
+- AI and technology: practical demos and useful explainers.
+- Comedy: original visual gags and relatable situations.
+- Entertainment: original commentary and trend explainers, not re-uploads.
+- Money and success + psychology and human behaviour: preserve the Jowi lion and storytelling format.
+- Candidate schedule and safety rules: see `docs/CHANNEL_STRATEGY.md` and `backend/app/channel_strategy.py`.
+- **Important:** strategy config exists, but continuous news monitoring, scheduling, YouTube Analytics integration, category-aware script generation, and automatic performance adjustments are not yet implemented.
+
+## Brand
 - Photorealistic black anthropomorphic male lion, black suit, white shirt, gold tie, gold eyes, serious expression.
 - Vertical 9:16, deep male voiceover, no captions, no typing/snap/ether effects.
 - Tagline: “Master Your Mind. Build Your Future.” Close with subscribe / “Thanks for watching”.
@@ -14,25 +23,24 @@ A phone-managed automation system for **The Jowi Code** YouTube channel.
 
 ## Implemented foundation
 - FastAPI health endpoint and protected status endpoint.
-- Authenticated job enqueue/list API with a three-job daily limit.
+- Authenticated job enqueue/list API with a three-job daily limit (this cap still needs to be changed before news automation can run as designed).
 - SQLite local development queue and PostgreSQL support via `DATABASE_URL`.
-- Brand-consistent script and four-scene prompt planner.
+- Current generic script and four-scene prompt planner.
 - AI Horde image generation adapter with sequential submissions, bounded 429 retries honoring Retry-After, bounded polling, and cancellation on failure.
-- Offline Pillow-based branded illustrated scene fallback when the free volunteer image API is throttled or unavailable. This fallback is illustrated (not photorealistic) and keeps the video pipeline moving without a paid service.
-- Optional Edge TTS voiceover endpoint; requires outbound internet and relies on a third-party service.
+- Offline Pillow-based branded illustrated scene fallback when the free volunteer image API is throttled or unavailable.
+- Optional Edge TTS voiceover endpoint.
 - FFmpeg vertical 9:16 renderer for four scene images and audio.
-- Private-draft pipeline that combines narration, rendering, and private-only YouTube upload; provider-backed end-to-end upload still requires a successful live worker run.
-- YouTube upload adapter that only requests private visibility.
+- Private-draft pipeline and YouTube upload adapter that only requests private visibility.
 - Render Docker blueprint with auto-deploy disabled.
-- Android source now includes HTTPS health check, authenticated status, job queue submission, and queue refresh. It has not yet been compiled or device-tested.
 
 ## Important limitations
-- AI Horde can generate scene images at no direct API cost, but anonymous requests have low priority, can time out, and may share prompts/images. Character consistency is not guaranteed. Alternatively, supply four pre-generated files named `scene-1.png` through `scene-4.png` in `SCENE_ASSETS_DIR`.
-- A manual GitHub Actions one-shot worker processes at most one job. It attempts AI Horde first, then uses local branded fallback art when that provider fails. It is not continuously scheduled.
-- YouTube OAuth secrets have been configured in GitHub; a successful live private upload to the real channel has not yet been verified.
-- Backend is deployed on Render at https://jowi-code-automation.onrender.com. The Android app remains a development scaffold and has not been compiled or device-tested.
+- AI Horde is a free volunteer service; anonymous requests are low-priority, may time out, and may share prompts/images. Character consistency is not guaranteed.
+- The GitHub Actions worker is manual-only and processes at most one queued job. It is not continuously scheduled.
+- The last successful run created a private draft. That verifies one manual pipeline run, not continuous scheduling or public publishing.
+- YouTube Analytics read access is not yet configured; automatic performance-based adjustments cannot be truthfully claimed until that integration is implemented and tested.
 - Hosted use needs a strong private `API_ACCESS_TOKEN` and durable `DATABASE_URL`; SQLite on an ephemeral web service is not suitable for production.
-- Public publishing is disabled. Upload adapter only creates private videos. The worker marks a job complete only after verifying a private upload response.
+- Public publishing remains disabled during validation. The current worker uploads private drafts only.
+- News automation must use original summaries, source corroboration, event deduplication, and original/licensed visuals; it must not copy article text or reuse unlicensed clips.
 
 ## Local backend
 From `backend/`:
