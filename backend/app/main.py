@@ -15,8 +15,8 @@ from app.jobs import enqueue_job, get_job, list_jobs
 from app.content import build_short_plan
 from app.voice import generate_voiceover
 
-app = FastAPI(title="The Jowi Code Automation API", version="0.6.0", description="Authenticated category-aware Shorts planning and job queue; YouTube uploads remain private-only.")
-ALLOWED_CATEGORIES = "^(short_video|breaking_news|ai_technology|comedy|entertainment|money_success|psychology)$"
+app = FastAPI(title="The Jowi Code Automation API", version="0.7.0", description="Category-aware Shorts planning and job queue; YouTube uploads remain private-only.")
+ALLOWED_CATEGORIES = "^(short_video|breaking_news|ai_technology|comedy|entertainment)$"
 
 
 class ServiceStatus(BaseModel):
@@ -36,12 +36,12 @@ class ServiceStatus(BaseModel):
 
 
 class JobRequest(BaseModel):
-    job_type: str = Field(default="money_success", pattern=ALLOWED_CATEGORIES)
+    job_type: str = Field(default="comedy", pattern=ALLOWED_CATEGORIES)
     topic: str = Field(min_length=3, max_length=240)
 
 
 class PlanRequest(BaseModel):
-    category: str = Field(default="money_success", pattern="^(breaking_news|ai_technology|comedy|entertainment|money_success|psychology)$")
+    category: str = Field(default="comedy", pattern="^(breaking_news|ai_technology|comedy|entertainment)$")
     topic: str = Field(min_length=3, max_length=240)
 
 
@@ -119,7 +119,7 @@ def status() -> ServiceStatus:
 @app.post("/api/jobs", status_code=202, dependencies=[Depends(require_api_token)])
 def create_job(request: JobRequest) -> dict:
     try:
-        job_type = "money_success" if request.job_type == "short_video" else request.job_type
+        job_type = "comedy" if request.job_type == "short_video" else request.job_type
         return enqueue_job(job_type, request.topic)
     except ValueError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
