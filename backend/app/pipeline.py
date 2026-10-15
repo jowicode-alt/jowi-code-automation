@@ -30,9 +30,20 @@ async def build_private_draft(
     try:
         await generate_voiceover(plan["narration"], str(audio_path))
         await asyncio.to_thread(render_short, scene_images, str(audio_path), str(video_path))
+        source_lines = [
+            f'{source.get("source", "Source")}: {source.get("url", "")}'
+            for source in plan.get("sources", [])
+            if source.get("url", "").startswith(("https://", "http://"))
+        ]
+        source_section = (
+            "Sources checked during draft preparation:\\n" + "\\n".join(source_lines)
+            if source_lines else
+            "Sources must be checked before any public release."
+        )
         description = (
-            f'{plan["tagline"]}\n\n{plan["narration"]}\n\n'
-            "Sources and further context should be checked before any public release.\n\n"
+            f'{plan["tagline"]}\\n\\n{plan["narration"]}\\n\\n'
+            f'{source_section}\\n\\n'
+            "This video is an original summary; consult linked sources for primary reporting.\\n\\n"
             "Subscribe to The Jowi Code. Thanks for watching."
         )
         tags_by_category = {
