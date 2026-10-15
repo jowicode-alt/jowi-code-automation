@@ -289,7 +289,7 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
 
     # Use bounded, serial requests to be kind to Commons' shared API.
     queries = []
-    clean_topic = " ".join(re.findall(r"[\\w-]+", topic))[:120].strip()
+    clean_topic = " ".join(re.findall(r"[\w-]+", topic))[:120].strip()
     if clean_topic:
         queries.append(clean_topic)
     if len(topic_terms) >= 2:
