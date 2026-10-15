@@ -16,7 +16,7 @@ on:
           - breaking_news
         default: all
       retry_blocked_job_id:
-        description: "Optional: re-queue only the previously blocked discipline test job"
+        description: "Optional: re-queue a specific blocked test or breaking-news job"
         required: false
         type: string
         default: ""
@@ -83,22 +83,28 @@ jobs:
           import os
           from app.jobs import get_job, update_job_status
 
-          expected_id = "4679ab92-9fcb-45f7-8aa2-0e5ccebe00b2"
           job_id = os.environ["RETRY_BLOCKED_JOB_ID"].strip()
-          if job_id != expected_id:
-              raise SystemExit("Refusing to re-queue: only the known blocked test job is allowed.")
           job = get_job(job_id)
           if job is None:
-              raise SystemExit("Refusing to re-queue: test job was not found in the configured database.")
+              raise SystemExit("Refusing to re-queue: job was not found in the configured database.")
           if job["status"] not in {"blocked", "failed"}:
               raise SystemExit(
                   "Refusing to re-queue: expected status 'blocked' or 'failed', "
                   f"found {job['status']!r}."
               )
+          category = os.environ.get("JOB_CATEGORY_INPUT", "all")
+          job_type = job.get("job_type", job.get("job_type", ""))
+          is_known_test_job = job_id == "4679ab92-9fcb-45f7-8aa2-0e5ccebe00b2"
+          is_selected_news_job = category == "breaking_news" and job_type == "breaking_news"
+          if not (is_known_test_job or is_selected_news_job):
+              raise SystemExit(
+                  "Refusing to re-queue: only the known test job or a breaking-news job "
+                  "when breaking_news is selected may be retried."
+              )
           updated = update_job_status(job_id, "queued", error=None)
           if not updated or updated["status"] != "queued":
               raise SystemExit("Re-queue could not be verified.")
-          print(f"Re-queued existing job {job_id} without creating a duplicate.")
+          print(f"Re-queued existing {job_type or 'test'} job {job_id} without creating a duplicate.")
           PY
 
       - name: Select the queued job category
