@@ -446,7 +446,7 @@ def test_image_provider_cancels_successful_submissions_when_another_submit_fails
                 ["good-one", "bad-prompt", "good-two", "good-three"], str(tmp_path), timeout_seconds=1
             )
         )
-    assert set(cancelled) == {"accepted-good-one", "accepted-good-two", "accepted-good-three"}
+    assert set(cancelled) == {"accepted-good-one"}  # submissions are intentionally sequential
 
 
 def test_worker_requeues_job_abandoned_for_over_45_minutes(monkeypatch, tmp_path):
