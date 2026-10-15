@@ -34,7 +34,10 @@ def run_once() -> dict:
     temp_assets = None
     media_source = "pre_generated_assets"
     try:
-        plan = build_short_plan(job["topic"])
+        category = job.get("job_type", "money_success")
+        if category == "short_video":
+            category = "money_success"
+        plan = build_short_plan(job["topic"], category=category)
         images = _existing_scene_images()
         if not images:
             from app.image_provider import generate_scene_images
@@ -44,8 +47,6 @@ def run_once() -> dict:
                 images = asyncio.run(generate_scene_images(prompts, temp_assets.name))
                 media_source = "ai_horde"
             except Exception as provider_exc:
-                # Shared-provider throttling should not block the entire video.
-                # Fall back to a deterministic, no-cost illustrated brand asset set.
                 from app.fallback_art import generate_fallback_scene_images
                 try:
                     images = generate_fallback_scene_images(temp_assets.name)
@@ -67,7 +68,9 @@ def run_once() -> dict:
                     return {"state": "blocked", "job_id": job["id"], "reason": message}
 
         from app.pipeline import build_private_draft
-        pipeline_result = asyncio.run(build_private_draft(job["topic"], images))
+        pipeline_result = asyncio.run(
+            build_private_draft(job["topic"], images, category=category)
+        )
         if (
             pipeline_result.get("status") != "uploaded_private"
             or pipeline_result.get("privacy_status") != "private"
@@ -83,6 +86,7 @@ def run_once() -> dict:
                 "video_id": pipeline_result["video_id"],
                 "privacy_status": "private",
                 "title": pipeline_result.get("title", plan["title"]),
+                "category": category,
             },
         }
         update_job_status(job["id"], "completed", result=result)
