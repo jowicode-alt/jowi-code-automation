@@ -101,18 +101,23 @@ def _fetch_reporting(sources: list[dict], client: httpx.Client) -> tuple[list[st
 
 
 def _script(topic: str, sources: list[dict], facts: list[str]) -> str:
-    # A transparent source-led rundown: narration attributes reported details and
-    # explicitly separates them from unconfirmed claims rather than inventing facts.
+    # Select details across publishers rather than taking every sentence from one page.
     unique = []
     seen = set()
-    for sentence in facts:
-        key = re.sub(r"[^a-z0-9]+", " ", sentence.lower()).strip()
-        if key and key not in seen:
-            seen.add(key)
-            unique.append(sentence)
+    max_sentences = max((len(item.get("facts", [])) for item in sources), default=0)
+    for index in range(max_sentences):
+        for source in sources:
+            source_facts = source.get("facts", [])
+            if index >= len(source_facts):
+                continue
+            sentence = source_facts[index]
+            key = re.sub(r"[^a-z0-9]+", " ", sentence.lower()).strip()
+            if key and key not in seen:
+                seen.add(key)
+                unique.append(sentence)
     if len(unique) < 3 or len(sources) < 2:
         raise RuntimeError("Not enough article-level evidence from two independent sources for a factual news script")
-    chosen = unique[:5]
+    chosen = unique[:6]
     outlet_names = list(dict.fromkeys(item["source"] for item in sources))
     intro = f"Here is the developing story: {topic}. "
     context = "Reporting from " + ", ".join(outlet_names[:3]) + " provides the following details. "
@@ -145,7 +150,15 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
             continue
         metadata = info.get("extmetadata") or {}
         license_name = re.sub("<[^>]+>", "", metadata.get("LicenseShortName", {}).get("value", ""))
-        if not any(allowed.lower() in license_name.lower() for allowed in ALLOWED_LICENSES):
+        license_lower = license_name.lower()
+        if "nc" in license_lower or "noncommercial" in license_lower or "nd" in license_lower or "noderivatives" in license_lower:
+            continue
+        if not any(allowed.lower() in license_lower for allowed in ALLOWED_LICENSES):
+            continue
+        topic_terms = {word for word in re.findall(r"[a-z0-9]{4,}", query.lower())}
+        title_terms = {word for word in re.findall(r"[a-z0-9]{4,}", page.get("title", "").lower())}
+        overlap = len(topic_terms & title_terms)
+        if topic_terms and overlap < (2 if len(topic_terms) >= 3 else 1):
             continue
         if int(info.get("size", 0) or 0) > MAX_VIDEO_BYTES:
             continue
