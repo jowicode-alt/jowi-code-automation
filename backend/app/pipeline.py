@@ -36,14 +36,14 @@ async def build_private_draft(
             if source.get("url", "").startswith(("https://", "http://"))
         ]
         source_section = (
-            "Sources checked during draft preparation:\\n" + "\\n".join(source_lines)
+            "Sources checked during draft preparation:\n" + "\n".join(source_lines)
             if source_lines else
             "Sources must be checked before any public release."
         )
         description = (
-            f'{plan["tagline"]}\\n\\n{plan["narration"]}\\n\\n'
-            f'{source_section}\\n\\n'
-            "This video is an original summary; consult linked sources for primary reporting.\\n\\n"
+            f'{plan["tagline"]}\n\n{plan["narration"]}\n\n'
+            f'{source_section}\n\n'
+            "This video is an original summary; consult linked sources for primary reporting.\n\n"
             "Subscribe to The Jowi Code. Thanks for watching."
         )
         tags_by_category = {
