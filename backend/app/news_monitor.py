@@ -204,8 +204,17 @@ def scan_once(client: httpx.Client | None = None) -> dict:
             "deduplicated": bool(job.get("deduplicated", False)),
             "source_count": len(sources),
         })
+    with _database() as (db, is_postgres):
+        pending_news_jobs = db.execute(
+            _query(
+                "SELECT COUNT(*) FROM jobs WHERE job_type = ? AND status = ?",
+                is_postgres,
+            ),
+            ("breaking_news", "queued"),
+        ).fetchone()[0]
     return {
         "feeds_checked": len(FEEDS),
+        "pending_news_jobs": int(pending_news_jobs),
         "articles_seen": len(articles),
         "recent_articles": len(recent),
         "candidates": len(queued),
