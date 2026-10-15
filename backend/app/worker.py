@@ -38,6 +38,16 @@ def run_once() -> dict:
         if category == "short_video":
             category = "money_success"
         plan = build_short_plan(job["topic"], category=category)
+        if category == "breaking_news" and not plan.get("source_review_ready", False):
+            message = (
+                "News draft blocked: fewer than two corroborating publisher sources were "
+                "found for this exact topic. No media was generated or uploaded."
+            )
+            update_job_status(
+                job["id"], "blocked", error=message,
+                result={"plan": plan, "media_created": False, "youtube_upload": None},
+            )
+            return {"state": "blocked", "job_id": job["id"], "reason": message}
         images = _existing_scene_images()
         if not images:
             from app.image_provider import generate_scene_images
