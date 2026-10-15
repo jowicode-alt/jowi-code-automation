@@ -34,7 +34,7 @@ def test_status_requires_token_and_does_not_enable_publishing(monkeypatch):
     monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
     response = client.get("/api/status", headers=HEADERS)
     assert response.status_code == 200
-    assert response.json()["state"] == "development"
+    assert response.json()["state"] in {"ready", "degraded"}
     assert response.json()["publishing_enabled"] is False
     assert "timestamp_utc" in response.json()
 
@@ -46,13 +46,13 @@ def test_status_reports_real_image_generation_mode(monkeypatch):
     assert anonymous.status_code == 200
     assert anonymous.json()["video_generation_configured"] == (anonymous.json()["ffmpeg_available"] and anonymous.json()["voiceover_adapter_available"])
     assert anonymous.json()["image_generation_adapter_available"] is True
-    assert anonymous.json()["image_generation_mode"] == "anonymous_shared_low_priority"
+    assert anonymous.json()["image_generation_mode"] == "anonymous_shared_low_priority_with_local_fallback"
 
     monkeypatch.setenv("AI_HORDE_API_KEY", "registered-test-key")
     registered = client.get("/api/status", headers=HEADERS)
     assert registered.status_code == 200
     assert registered.json()["video_generation_configured"] == (registered.json()["ffmpeg_available"] and registered.json()["voiceover_adapter_available"])
-    assert registered.json()["image_generation_mode"] == "registered_key"
+    assert registered.json()["image_generation_mode"] == "registered_key_with_local_fallback"
 
 
 def test_job_queue_requires_authentication(monkeypatch, tmp_path):
@@ -252,6 +252,11 @@ def test_worker_claims_job_and_blocks_honestly_without_image_provider(monkeypatc
         raise TimeoutError("simulated provider timeout")
 
     monkeypatch.setattr(image_provider, "generate_scene_images", fake_image_generation)
+    import app.fallback_art as fallback_art
+    monkeypatch.setattr(
+        fallback_art, "generate_fallback_scene_images",
+        lambda output_dir: (_ for _ in ()).throw(RuntimeError("simulated fallback failure")),
+    )
     monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "worker.sqlite3"))
     monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
     created = client.post(
@@ -285,6 +290,11 @@ def test_worker_processes_only_one_job_per_invocation(monkeypatch, tmp_path):
         raise TimeoutError("simulated provider timeout")
 
     monkeypatch.setattr(image_provider, "generate_scene_images", fake_image_generation)
+    import app.fallback_art as fallback_art
+    monkeypatch.setattr(
+        fallback_art, "generate_fallback_scene_images",
+        lambda output_dir: (_ for _ in ()).throw(RuntimeError("simulated fallback failure")),
+    )
     monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "one-at-a-time.sqlite3"))
     monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
     first = client.post("/api/jobs", json={"topic": "First topic"}, headers=HEADERS).json()
@@ -345,7 +355,7 @@ def test_worker_does_not_complete_if_pipeline_does_not_confirm_private_upload(mo
         "/api/jobs", json={"topic": "Build discipline"}, headers=HEADERS
     ).json()
 
-    async def fake_pipeline(topic, scene_images):
+    async def fake_pipeline(topic, scene_images, category=None):
         return {"status": "uploaded_private", "privacy_status": "public", "video_id": "wrong"}
 
     monkeypatch.setattr(pipeline, "build_private_draft", fake_pipeline)
@@ -381,7 +391,7 @@ def test_worker_marks_invalid_topic_failed_instead_of_leaving_job_running(monkey
     assert created.status_code == 202
     job_id = created.json()["id"]
 
-    def fail_plan(_topic):
+    def fail_plan(_topic, category=None):
         raise ValueError("planned failure for test")
 
     monkeypatch.setattr(worker, "build_short_plan", fail_plan)
@@ -403,6 +413,7 @@ def test_image_provider_cancels_successful_submissions_when_another_submit_fails
         def __init__(self, request_id=None, fail=False):
             self.request_id = request_id
             self.fail = fail
+            self.status_code = 500 if fail else 200
 
         def raise_for_status(self):
             if self.fail:
