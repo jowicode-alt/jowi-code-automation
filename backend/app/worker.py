@@ -153,8 +153,8 @@ def run_once(category_filter: str | None = None) -> dict:
 if __name__ == "__main__":
     import json
     category_filter = os.getenv("JOB_CATEGORY_FILTER") or None
-    # No daily news cap: this per-run bound protects the free runner from bursts.
-    max_jobs = 3 if category_filter == "breaking_news" else 1
+    # The workflow's PRIVATE confirmation authorizes exactly one private upload per run.
+    max_jobs = 1
     outcomes = []
     for _ in range(max_jobs):
         outcome = run_once(category_filter)
