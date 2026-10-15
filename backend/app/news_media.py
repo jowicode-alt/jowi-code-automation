@@ -15,7 +15,7 @@ from urllib.parse import quote
 import httpx
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
-USER_AGENT = "TheJowiCodeNewsBot/1.0 (news video; contact channel owner)"
+USER_AGENT = "TheJowiCodeNewsBot/1.0 (https://github.com/jowicode-alt/jowi-code-automation) httpx"
 VIDEO_EXTENSIONS = (".webm", ".ogv", ".ogg", ".mp4", ".mov")
 ALLOWED_LICENSES = ("CC0", "Public domain", "CC BY", "CC BY-SA", "Creative Commons Attribution")
 MAX_VIDEO_BYTES = 35 * 1024 * 1024
@@ -252,6 +252,13 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
         "gsrlimit": 30, "prop": "imageinfo", "iiprop": "url|extmetadata|mime|size",
     }
     response = client.get(COMMONS_API, params=params, headers={"User-Agent": USER_AGENT})
+    if response.status_code == 403:
+        raise RuntimeError(
+            "Wikimedia Commons denied the API request (HTTP 403). The client sends a "
+            "descriptive User-Agent with a contact URL; do not bypass the denial or use "
+            "unverified footage. Check the response details and retry later if access is "
+            "temporarily restricted."
+        )
     response.raise_for_status()
     pages = response.json().get("query", {}).get("pages", {})
     results = []
