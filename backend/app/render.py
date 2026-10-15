@@ -14,43 +14,70 @@ def _timestamp(seconds: float) -> str:
     return f"{hours:02}:{minutes:02}:{secs:02},{millis:03}"
 
 
-def _write_captions(text: str, duration: float, directory: Path) -> Path:
-    """Create evenly paced, wrapped SRT captions from the spoken narration."""
-    clean = re.sub(r"\s+", " ", text).strip()
-    if not clean:
-        clean = "The Jowi Code — Master Your Mind. Build Your Future."
-    words = clean.split()
-    chunks = []
-    current = []
-    for word in words:
-        current.append(word)
-        if len(current) >= 7 or len(" ".join(current)) >= 38:
-            chunks.append(" ".join(current))
-            current = []
-    if current:
-        chunks.append(" ".join(current))
-    chunks = ["\n".join(textwrap.wrap(chunk, width=38)) for chunk in chunks]
-    weights = [max(1, len(re.sub(r"\W", "", chunk))) for chunk in chunks]
-    total_weight = sum(weights)
-    cursor = 0.0
-    entries = []
-    for index, (chunk, weight) in enumerate(zip(chunks, weights), start=1):
-        end = duration if index == len(chunks) else cursor + duration * weight / total_weight
-        entries.extend([str(index), f"{_timestamp(cursor)} --> {_timestamp(end)}", chunk, ""])
-        cursor = end
+def _write_captions(text: str, duration: float, directory: Path, word_boundaries: list[dict] | None = None) -> Path:
+    """Write compact captions aligned to actual TTS word timings where available."""
     path = directory / "captions.srt"
+    entries = []
+    timed_words = []
+    for item in word_boundaries or []:
+        word = str(item.get("text", "")).strip()
+        if not word:
+            continue
+        offset = int(item.get("offset", 0))
+        length = int(item.get("duration", 0))
+        start = max(0.0, offset / 10_000_000)
+        finish = min(duration, max(start + 0.08, (offset + length) / 10_000_000))
+        timed_words.append((word, start, finish))
+
+    if timed_words:
+        groups, group = [], []
+        for item in timed_words:
+            proposed = " ".join([part[0] for part in group] + [item[0]])
+            if group and (len(group) >= 5 or len(proposed) > 30 or item[1] - group[0][1] > 2.8):
+                groups.append(group)
+                group = []
+            group.append(item)
+        if group:
+            groups.append(group)
+        for index, group in enumerate(groups, start=1):
+            phrase = " ".join(part[0] for part in group)
+            start_time = max(0.0, group[0][1] - 0.04)
+            end_time = min(duration, max(group[-1][2] + 0.12, start_time + 0.35))
+            if index < len(groups):
+                end_time = min(end_time, max(start_time + 0.2, groups[index][0][1] - 0.02))
+            entries.extend([str(index), f"{_timestamp(start_time)} --> {_timestamp(end_time)}", phrase, ""])
+    else:
+        # Fallback when the speech provider does not expose word boundaries.
+        clean = re.sub(r"\s+", " ", text).strip()
+        words = clean.split()
+        chunks, current = [], []
+        for word in words:
+            proposed = " ".join(current + [word])
+            if current and (len(current) >= 5 or len(proposed) > 30):
+                chunks.append(" ".join(current))
+                current = []
+            current.append(word)
+        if current:
+            chunks.append(" ".join(current))
+        weights = [max(1, len(re.sub(r"\W", "", chunk))) for chunk in chunks]
+        total_weight = sum(weights) or 1
+        cursor = 0.0
+        for index, (chunk, weight) in enumerate(zip(chunks, weights), start=1):
+            finish = duration if index == len(chunks) else cursor + duration * weight / total_weight
+            entries.extend([str(index), f"{_timestamp(cursor)} --> {_timestamp(finish)}", chunk, ""])
+            cursor = finish
+
     path.write_text("\n".join(entries), encoding="utf-8")
     return path
-
 
 def _caption_filter(srt_path: Path) -> str:
     escaped = str(srt_path).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
     return (
         f"subtitles='{escaped}':force_style="
-        "'FontName=Arial,FontSize=42,PrimaryColour=&H00FFFFFF,"
-        "OutlineColour=&H00101010,BorderStyle=1,Outline=3,Shadow=1,"
-        "Alignment=2,MarginL=90,MarginR=90,MarginV=260,"
-        "WrapStyle=2,Bold=1'"
+        "'FontName=Arial,FontSize=27,PrimaryColour=&H00FFFFFF,"
+        "OutlineColour=&H00101010,BorderStyle=1,Outline=2,Shadow=1,"
+        "Alignment=5,MarginL=140,MarginR=140,MarginV=0,"
+        "WrapStyle=2,Bold=0'"
     )
 
 
@@ -73,7 +100,7 @@ def _render(command: list[str], target: Path, timeout: int = 240) -> str:
     return str(target)
 
 
-def render_short(scene_images: list[str], audio_path: str, output_path: str, narration: str = "") -> str:
+def render_short(scene_images: list[str], audio_path: str, output_path: str, narration: str = "", word_boundaries: list[dict] | None = None) -> str:
     """Render four scene images without cropping their edges, with on-screen captions."""
     if len(scene_images) != 4:
         raise ValueError("A Jowi Code Short requires exactly four scene images")
@@ -88,7 +115,7 @@ def render_short(scene_images: list[str], audio_path: str, output_path: str, nar
     duration = _probe_duration(audio)
     scene_duration = duration / len(images)
     with tempfile.TemporaryDirectory(prefix="jowi-captions-") as temp:
-        srt = _write_captions(narration, duration, Path(temp))
+        srt = _write_captions(narration, duration, Path(temp), word_boundaries)
         command = ["ffmpeg", "-y"]
         for image in images:
             command += ["-loop", "1", "-framerate", "30", "-t", f"{scene_duration:.3f}", "-i", str(image)]
@@ -111,7 +138,7 @@ def render_short(scene_images: list[str], audio_path: str, output_path: str, nar
         return _render(command, target)
 
 
-def render_news_short(video_clips: list[str], audio_path: str, output_path: str, narration: str = "") -> str:
+def render_news_short(video_clips: list[str], audio_path: str, output_path: str, narration: str = "", word_boundaries: list[dict] | None = None) -> str:
     """Render a 9:16 news Short with licensed moving footage, safe framing, and captions."""
     if not video_clips:
         raise ValueError("At least one licensed moving news clip is required")
