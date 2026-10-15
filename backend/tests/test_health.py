@@ -245,17 +245,12 @@ def test_existing_sqlite_queue_schema_is_migrated(monkeypatch, tmp_path):
 
 def test_worker_claims_job_and_blocks_honestly_without_image_provider(monkeypatch, tmp_path):
     from app.jobs import get_job
-    from app.worker import run_once, BLOCKED_REASON
-    import app.image_provider as image_provider
+    from app.worker import run_once
+    import app.news_media as news_media
 
-    async def fake_image_generation(prompts, output_dir):
-        raise TimeoutError("simulated provider timeout")
-
-    monkeypatch.setattr(image_provider, "generate_scene_images", fake_image_generation)
-    import app.fallback_art as fallback_art
     monkeypatch.setattr(
-        fallback_art, "generate_fallback_scene_images",
-        lambda output_dir: (_ for _ in ()).throw(RuntimeError("simulated fallback failure")),
+        news_media, "build_broll_package",
+        lambda topic, category, output_dir: (_ for _ in ()).throw(RuntimeError("simulated footage unavailable")),
     )
     monkeypatch.setenv("JOB_DB_PATH", str(tmp_path / "worker.sqlite3"))
     monkeypatch.setenv("API_ACCESS_TOKEN", TEST_TOKEN)
@@ -268,7 +263,7 @@ def test_worker_claims_job_and_blocks_honestly_without_image_provider(monkeypatc
     assert result["job_id"] == created["id"]
     job = get_job(created["id"])
     assert job["status"] == "blocked"
-    assert BLOCKED_REASON in job["error"]
+    assert "suitable licensed moving footage was not available" in job["error"]
     assert job["result"]["media_created"] is False
     assert job["result"]["youtube_upload"] is None
     assert len(job["result"]["plan"]["scenes"]) == 4
@@ -321,8 +316,18 @@ def test_worker_completes_only_after_pipeline_confirms_private_upload(monkeypatc
         "/api/jobs", json={"topic": "Build discipline"}, headers=HEADERS
     ).json()
 
-    async def fake_pipeline(topic, scene_images, category=None):
-        assert len(scene_images) == 4
+    import app.news_media as news_media
+    monkeypatch.setattr(
+        news_media, "build_broll_package",
+        lambda topic, category, output_dir: {
+            "clips": [{"path": f"{output_dir}/clip.mp4", "title": "Test clip", "license": "CC BY"}],
+            "sources": [], "narration": "Test narration", "footage_provider": "test",
+        },
+    )
+
+    async def fake_pipeline(topic, scene_images, category=None, news_package=None):
+        assert scene_images == []
+        assert news_package and len(news_package["clips"]) == 1
         return {
             "video_id": "confirmed-private-id",
             "privacy_status": "private",
@@ -355,7 +360,16 @@ def test_worker_does_not_complete_if_pipeline_does_not_confirm_private_upload(mo
         "/api/jobs", json={"topic": "Build discipline"}, headers=HEADERS
     ).json()
 
-    async def fake_pipeline(topic, scene_images, category=None):
+    import app.news_media as news_media
+    monkeypatch.setattr(
+        news_media, "build_broll_package",
+        lambda topic, category, output_dir: {
+            "clips": [{"path": f"{output_dir}/clip.mp4", "title": "Test clip", "license": "CC BY"}],
+            "sources": [], "narration": "Test narration", "footage_provider": "test",
+        },
+    )
+
+    async def fake_pipeline(topic, scene_images, category=None, news_package=None):
         return {"status": "uploaded_private", "privacy_status": "public", "video_id": "wrong"}
 
     monkeypatch.setattr(pipeline, "build_private_draft", fake_pipeline)
