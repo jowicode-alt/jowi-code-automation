@@ -212,3 +212,14 @@ def test_video_search_does_not_accept_unknown_licence_or_unrelated_video():
         },
     })
     assert _video_results("Election protest", client) == []
+
+
+def test_video_search_expands_common_news_event_vocabulary():
+    client = _SearchClient({
+        "ballot campaign": {
+            "1": _video_page("File:Election campaign footage.webm", description="Campaign event and ballot"),
+        },
+    })
+    results = _video_results("Election", client)
+    assert "ballot campaign filemime:video" in client.queries
+    assert any("Election campaign" in item["title"] for item in results)
