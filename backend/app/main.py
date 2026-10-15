@@ -70,7 +70,10 @@ def health() -> dict[str, str]:
 @app.get("/api/status", response_model=ServiceStatus, dependencies=[Depends(require_api_token)])
 def status() -> ServiceStatus:
     image_key = os.getenv("AI_HORDE_API_KEY", "").strip()
-    image_adapter_available = True
+    image_adapter_available = (
+        importlib.util.find_spec("app.image_provider") is not None
+        and importlib.util.find_spec("PIL") is not None
+    )
     ffmpeg_available = shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
     voiceover_available = importlib.util.find_spec("edge_tts") is not None
     database_backend, database_connected, database_durable = _database_status()
@@ -80,13 +83,20 @@ def status() -> ServiceStatus:
     # This means the required local media adapters/dependencies exist, not that a
     # real provider run has succeeded. image_generation_mode exposes anonymous limits.
     media_components_available = image_adapter_available and ffmpeg_available and voiceover_available
+    service_state = "ready" if (
+        database_connected and media_components_available and oauth_configured
+    ) else "degraded"
     return ServiceStatus(
         service="jowi-code-automation-api",
-        state="development",
+        state=service_state,
         publishing_enabled=False,
         video_generation_configured=media_components_available,
         image_generation_adapter_available=image_adapter_available,
-        image_generation_mode="registered_key" if image_key and image_key != "0000000000" else "anonymous_shared_low_priority",
+        image_generation_mode=(
+            "registered_key_with_local_fallback"
+            if image_key and image_key != "0000000000"
+            else "anonymous_shared_low_priority_with_local_fallback"
+        ),
         ffmpeg_available=ffmpeg_available,
         voiceover_adapter_available=voiceover_available,
         database_backend=database_backend,
