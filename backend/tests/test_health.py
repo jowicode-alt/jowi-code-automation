@@ -155,7 +155,7 @@ def test_pipeline_creates_private_draft_and_cleans_temporary_media(monkeypatch, 
     async def fake_voice(text, output_path):
         Path(output_path).write_bytes(b"fake-audio")
 
-    def fake_render(scene_images, audio_path, output_path):
+    def fake_render(scene_images, audio_path, output_path, narration=""):
         Path(output_path).write_bytes(b"fake-video")
         return output_path
 
