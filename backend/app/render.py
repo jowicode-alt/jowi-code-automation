@@ -1,4 +1,4 @@
-"""Render vertical Shorts with safe framing and no on-screen captions."""
+"""Render vertical Shorts with faster cuts, subtle camera motion, and no captions."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -60,36 +60,50 @@ def render_short(scene_images: list[str], audio_path: str, output_path: str, nar
 
 
 def render_news_short(video_clips: list[str], audio_path: str, output_path: str, narration: str = "", word_boundaries: list[dict] | None = None) -> str:
-    """Render a 9:16 news Short with licensed moving footage and voiceover, no captions."""
+    """Render a vertical Short with brisk eight-beat moving footage and no captions.
+
+    Reorders/reuses available licensed clips to create more frequent visual changes,
+    applies restrained contrast/saturation and a slow digital push, and keeps the
+    narration as the only foreground audio. This is editing polish, not a substitute
+    for truly topic-specific footage; the worker must still reject missing footage.
+    """
     if not video_clips:
-        raise ValueError("At least one licensed moving news clip is required")
+        raise ValueError("At least one licensed moving clip is required")
     clips = [Path(item) for item in video_clips]
     audio = Path(audio_path)
     if any(not clip.is_file() or clip.stat().st_size == 0 for clip in clips):
-        raise FileNotFoundError("One or more licensed news clips are missing or empty")
+        raise FileNotFoundError("One or more licensed moving clips are missing or empty")
     if not audio.is_file():
         raise FileNotFoundError("News voiceover audio is missing")
     target = Path(output_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     duration = _probe_duration(audio)
-    scene_duration = duration / len(clips)
-    with tempfile.TemporaryDirectory(prefix="jowi-news-scenes-") as temp:
+
+    # Eight visual beats create a new shot about every 2–3 seconds in a typical Short.
+    # Cycle through the available clips in a varied order instead of holding each for a quarter.
+    order = [0, min(1, len(clips) - 1), min(2, len(clips) - 1), min(3, len(clips) - 1),
+             min(1, len(clips) - 1), 0, min(3, len(clips) - 1), min(2, len(clips) - 1)]
+    scene_duration = duration / len(order)
+    with tempfile.TemporaryDirectory(prefix="jowi-moving-scenes-") as temp:
         command = ["ffmpeg", "-y"]
-        for clip in clips:
-            command += ["-stream_loop", "-1", "-i", str(clip)]
+        for index in order:
+            command += ["-stream_loop", "-1", "-i", str(clips[index])]
         command += ["-i", str(audio)]
         filters = []
-        for index in range(len(clips)):
+        for index in range(len(order)):
             filters.append(
-                f"[{index}:v]scale=1080:1920:force_original_aspect_ratio=decrease,"
-                f"pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,"
+                f"[{index}:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+                f"crop=1080:1920,setsar=1,fps=30,trim=duration={scene_duration:.3f},"
+                f"setpts=PTS-STARTPTS,eq=contrast=1.05:saturation=1.12,"
+                f"zoompan=z='min(zoom+0.001,1.06)':"
+                f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30,"
                 f"trim=duration={scene_duration:.3f},setpts=PTS-STARTPTS,format=yuv420p[v{index}]"
             )
-        joined = "".join(f"[v{index}]" for index in range(len(clips)))
-        filters.append(f"{joined}concat=n={len(clips)}:v=1:a=0[vout]")
+        joined = "".join(f"[v{index}]" for index in range(len(order)))
+        filters.append(f"{joined}concat=n={len(order)}:v=1:a=0[vout]")
         command += [
-            "-filter_complex", ";".join(filters), "-map", "[vout]", "-map", f"{len(clips)}:a:0",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "24", "-c:a", "aac",
-            "-b:a", "128k", "-t", f"{duration:.3f}", "-movflags", "+faststart", str(target),
+            "-filter_complex", ";".join(filters), "-map", "[vout]", "-map", f"{len(order)}:a:0",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-c:a", "aac",
+            "-b:a", "160k", "-t", f"{duration:.3f}", "-movflags", "+faststart", str(target),
         ]
-        return _render(command, target, timeout=240)
+        return _render(command, target, timeout=300)
