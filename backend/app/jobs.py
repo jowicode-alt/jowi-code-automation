@@ -91,12 +91,36 @@ def enqueue_job(job_type: str, topic: str) -> dict:
     now = _now()
     job_id = str(uuid.uuid4())
     with _database() as (db, is_postgres):
-        count = db.execute(
-            _query("SELECT COUNT(*) FROM jobs WHERE created_at_utc >= ?", is_postgres),
-            (datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat(),),
-        ).fetchone()[0]
-        if count >= 3:
-            raise ValueError("Daily job limit reached (maximum 3 jobs per UTC day)")
+        day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        if job_type == "breaking_news":
+            # Avoid queuing the exact same headline repeatedly during continuous RSS polling.
+            existing = db.execute(
+                _query(
+                    "SELECT id, job_type, topic, status, created_at_utc, updated_at_utc, error, result_json "
+                    "FROM jobs WHERE job_type = ? AND lower(topic) = lower(?) AND created_at_utc >= ? "
+                    "ORDER BY created_at_utc DESC LIMIT 1",
+                    is_postgres,
+                ),
+                (job_type, topic.strip(), (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()),
+            ).fetchone()
+            if existing is not None:
+                found = _as_dict(existing, is_postgres)
+                raw = found.pop("result_json")
+                return {
+                    **found,
+                    "result": json.loads(raw) if raw else None,
+                    "deduplicated": True,
+                }
+        else:
+            count = db.execute(
+                _query(
+                    "SELECT COUNT(*) FROM jobs WHERE created_at_utc >= ? AND job_type != ?",
+                    is_postgres,
+                ),
+                (day_start, "breaking_news"),
+            ).fetchone()[0]
+            if count >= 3:
+                raise ValueError("Daily regular-content job limit reached (maximum 3 jobs per UTC day)")
         db.execute(
             _query("INSERT INTO jobs (id, job_type, topic, status, created_at_utc, updated_at_utc, error, result_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", is_postgres),
             (job_id, job_type, topic.strip(), "queued", now, now, None, None),
