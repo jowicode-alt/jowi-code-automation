@@ -72,35 +72,25 @@ def run_once(category_filter: str | None = None) -> dict:
                 )
                 return {"state": "blocked", "job_id": job["id"], "reason": message}
         else:
-            images = _existing_scene_images()
-            if not images:
-                from app.image_provider import generate_scene_images
-                prompts = [scene["visual_prompt"] for scene in plan["scenes"]]
-                print("Worker: generating four scene images", flush=True)
-                try:
-                    images = asyncio.run(generate_scene_images(prompts, temp_assets.name))
-                    media_source = "ai_horde"
-                except Exception as provider_exc:
-                    from app.fallback_art import generate_fallback_scene_images
-                    try:
-                        images = generate_fallback_scene_images(temp_assets.name)
-                        media_source = "local_branded_fallback"
-                        print(
-                            "Image provider unavailable; continuing with local fallback. "
-                            f"Provider error: {type(provider_exc).__name__}: {provider_exc}",
-                            flush=True,
-                        )
-                    except Exception as fallback_exc:
-                        message = (
-                            f"{BLOCKED_REASON} Provider detail: {type(provider_exc).__name__}: "
-                            f"{provider_exc}. Local fallback also failed: "
-                            f"{type(fallback_exc).__name__}: {fallback_exc}"
-                        )
-                        update_job_status(
-                            job["id"], "blocked", error=message,
-                            result={"plan": plan, "media_created": False, "youtube_upload": None},
-                        )
-                        return {"state": "blocked", "job_id": job["id"], "reason": message}
+            # Non-news Shorts use real licensed moving footage, never static placeholder art.
+            from app.news_media import build_broll_package
+            print(f"Worker: finding licensed moving footage for {category}", flush=True)
+            try:
+                news_package = build_broll_package(job["topic"], category, temp_assets.name)
+                media_source = news_package.get("footage_provider", "Wikimedia Commons")
+                print(f"Worker: prepared {len(news_package['clips'])} moving clips", flush=True)
+            except Exception as footage_exc:
+                message = (
+                    f"Private draft blocked; suitable licensed moving footage was not available. "
+                    f"No static fallback or upload made: {type(footage_exc).__name__}: {footage_exc}"
+                )
+                update_job_status(
+                    job["id"], "blocked", error=message,
+                    result={"plan": plan, "media_created": False, "youtube_upload": None,
+                            "moving_clips_used": 0},
+                )
+                return {"state": "blocked", "job_id": job["id"], "reason": message}
+
 
         from app.pipeline import build_private_draft
         print("Worker: generating voiceover and rendering the video", flush=True)
@@ -109,10 +99,7 @@ def run_once(category_filter: str | None = None) -> dict:
                 build_private_draft(job["topic"], images, category=category, news_package=news_package)
             )
         else:
-            # Keep the existing call shape for non-news jobs and their compatibility tests.
-            pipeline_result = asyncio.run(
-                build_private_draft(job["topic"], images, category=category)
-            )
+            raise RuntimeError("Moving-footage package was not prepared; refusing static render.")
         if (
             pipeline_result.get("status") != "uploaded_private"
             or pipeline_result.get("privacy_status") != "private"
