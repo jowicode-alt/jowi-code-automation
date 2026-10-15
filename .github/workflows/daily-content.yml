@@ -1,0 +1,145 @@
+name: Daily private content automation
+
+on:
+  schedule:
+    # Uganda is UTC+3: comedy 12:30, AI/technology 15:00, entertainment 18:00 EAT.
+    - cron: "30 9 * * *"
+    - cron: "0 12 * * *"
+    - cron: "0 15 * * *"
+  workflow_dispatch:
+    inputs:
+      category:
+        description: "Content type to create as one private YouTube draft"
+        required: true
+        type: choice
+        options:
+          - comedy
+          - ai_technology
+          - entertainment
+        default: comedy
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jowi-daily-private-content
+  cancel-in-progress: false
+
+jobs:
+  create-private-short:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: ${{ secrets.JOWI_DATABASE_URL }}
+      AI_HORDE_API_KEY: ${{ secrets.AI_HORDE_API_KEY }}
+      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      TTS_VOICE: en-US-GuyNeural
+      TTS_RATE: -5%
+      TTS_PITCH: -8Hz
+      EVENT_SCHEDULE: ${{ github.event.schedule || '' }}
+      MANUAL_CATEGORY: ${{ inputs.category || '' }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in DATABASE_URL YOUTUBE_CLIENT_ID YOUTUBE_CLIENT_SECRET YOUTUBE_REFRESH_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required repository secret for ${name} is missing. No job was processed."
+              exit 1
+            fi
+          done
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install FFmpeg and Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          python -m pip install -r requirements.txt
+
+      - name: Queue one original category idea and render privately
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${MANUAL_CATEGORY:-}" in
+            comedy|ai_technology|entertainment) CATEGORY="$MANUAL_CATEGORY" ;;
+            "") 
+              case "$EVENT_SCHEDULE" in
+                "30 9 * * *") CATEGORY="comedy" ;;
+                "0 12 * * *") CATEGORY="ai_technology" ;;
+                "0 15 * * *") CATEGORY="entertainment" ;;
+                *) echo "::error::Could not identify the scheduled category."; exit 1 ;;
+              esac
+              ;;
+            *) echo "::error::Unsupported category."; exit 1 ;;
+          esac
+          export CATEGORY
+          python - <<'PY'
+          import os
+          from datetime import datetime, timezone
+          from app.jobs import enqueue_job, list_jobs
+
+          category = os.environ["CATEGORY"]
+          topics = {
+              "comedy": [
+                  "When you say you will leave in five minutes",
+                  "The friend who turns a simple plan into a mission",
+                  "Trying to save money while your cravings disagree",
+                  "When the group chat makes the decision harder",
+                  "The confidence of someone who did not read the instructions",
+                  "When your alarm clock becomes your biggest enemy",
+                  "The person who says they are almost there but has not left",
+              ],
+              "ai_technology": [
+                  "Three practical ways to use AI to organize a busy day",
+                  "How to fact-check an AI answer before trusting it",
+                  "A simple AI workflow for turning notes into an action plan",
+                  "How to write a clearer prompt for a useful AI result",
+                  "What AI can and cannot do reliably for everyday tasks",
+                  "How to compare AI tools without falling for hype",
+                  "A safer way to use AI when handling personal information",
+              ],
+              "entertainment": [
+                  "Why short-form trends spread so quickly",
+                  "How internet challenges turn into global conversations",
+                  "The difference between a viral moment and a lasting trend",
+                  "Why audiences love unexpected plot twists",
+                  "How creators make a familiar format feel original",
+                  "What makes an online moment memorable",
+                  "Why entertainment trends change so fast",
+              ],
+          }
+          today = datetime.now(timezone.utc).date()
+          topic = topics[category][today.toordinal() % len(topics[category])]
+          existing = [
+              job for job in list_jobs(100)
+              if job.get("job_type") == category
+              and job.get("status") in {"queued", "running"}
+          ]
+          if existing:
+              print(f"Reusing existing {category} job {existing[0]['id']}: {existing[0]['topic']}")
+          else:
+              job = enqueue_job(category, topic)
+              print(f"Queued {category} job {job['id']}: {job['topic']}")
+          PY
+          echo "JOB_CATEGORY_FILTER=$CATEGORY" >> "$GITHUB_ENV"
+
+      - name: Install and run private one-job worker
+        run: python -m app.worker
+
+      # All uploads use the private-only YouTube uploader. Nothing is published publicly.
+      # This workflow creates no artifacts to conserve free-tier storage.
