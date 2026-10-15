@@ -190,10 +190,11 @@ def scan_once(client: httpx.Client | None = None) -> dict:
             sources_by_name.setdefault(other["source"], other)
         if len(sources_by_name) < 2:
             continue
-        key = _event_key(article["title"])
-        if key in seen_keys:
+        cluster_keys = {_event_key(article["title"])}
+        cluster_keys.update(_event_key(other["title"]) for other in matching)
+        if cluster_keys & seen_keys:
             continue
-        seen_keys.add(key)
+        seen_keys.update(cluster_keys)
         sources = list(sources_by_name.values())[:4]
         _store_event(article["title"], sources)
         job = enqueue_job("breaking_news", article["title"])
