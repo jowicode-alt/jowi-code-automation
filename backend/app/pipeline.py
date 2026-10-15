@@ -30,13 +30,17 @@ async def build_private_draft(
     else:
         clips = news_package.get("clips", [])
         sources = news_package.get("sources", [])
-        if not clips or len(sources) < 2 or not news_package.get("narration", "").strip():
+        if not clips:
+            raise ValueError("Moving-footage package must contain at least one clip")
+        if (category or "breaking_news") == "breaking_news" and (
+            len(sources) < 2 or not news_package.get("narration", "").strip()
+        ):
             raise ValueError("News package requires moving footage, article facts, and two sources")
         if any(not Path(item).is_file() for item in clips):
-            raise FileNotFoundError("One or more licensed news clips are missing")
+            raise FileNotFoundError("One or more licensed moving clips are missing")
 
     plan = build_short_plan(topic, category=category)
-    narration = news_package["narration"] if news_package else plan["narration"]
+    narration = (news_package.get("narration") or plan["narration"]) if news_package else plan["narration"]
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
     run_id = str(uuid.uuid4())
@@ -74,15 +78,18 @@ async def build_private_draft(
                 )
         source_section = (
             "Reporting sources:\n" + "\n".join(source_lines)
-            if source_lines else "Sources must be checked before any public release."
+            if source_lines else "Visuals are sourced from the open-license footage credited below."
         )
         if clip_lines:
             source_section += "\n\nMoving-footage credits (Wikimedia Commons):\n" + "\n".join(clip_lines)
+        if plan["category"] == "breaking_news":
+            disclaimer = "This is a source-based news summary, not a live broadcast. Details can change; consult the linked reporting and footage licenses."
+        else:
+            disclaimer = "Original voiceover paired with openly licensed moving footage. Consult the clip credits and license links above."
         description = (
             f'{plan["tagline"]}\n\n{narration}\n\n'
             f'{source_section}\n\n'
-            "This is a source-based news summary, not a live broadcast. Details can change; "
-            "consult the linked reporting and footage licenses.\n\n"
+            f'{disclaimer}\n\n'
             "Subscribe to The Jowi Code. Thanks for watching."
         )
         tags_by_category = {
