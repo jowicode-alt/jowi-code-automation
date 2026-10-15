@@ -1,7 +1,7 @@
-"""Category-aware original Shorts planner for The Jowi Code.
+"""High-retention original Shorts planner for The Jowi Code.
 
-Uses topic-appropriate visuals and direct presentation, without the Jowi lion or
-storytelling format. News remains a private draft and requires source review.
+Scripts use a hook, escalation/proof, payoff, and a concise close. No burned-in
+captions or subtitles; use original or appropriately licensed visuals.
 """
 from __future__ import annotations
 
@@ -27,55 +27,63 @@ def _category(topic: str, category: str | None) -> tuple[str, str]:
 def _scenes(category: str) -> list[tuple[str, str]]:
     if category == "ai_technology":
         return [
-            ("Hook", "Show the real tool or workflow immediately in a vertical screen-led frame; no fabricated interface or claims."),
-            ("Problem", "Show the task or user problem before the tool is used, with a clear visual hierarchy."),
-            ("Demo", "Show a practical step-by-step workflow using original screen capture or licensed visuals; only verified capabilities."),
-            ("Result", "Show the actual outcome and one useful limitation or takeaway; clean end frame."),
+            ("Cold open", "Start on the most visually surprising real technology shot; immediate close framing and movement."),
+            ("Challenge", "Cut to a specific everyday task or problem; show a clear visual change, not a generic stock montage."),
+            ("Test", "Use relevant computer, phone, robotics, or human-workflow footage; never fabricate a product interface."),
+            ("Payoff", "End on the practical lesson or limitation with a visually distinct final shot."),
         ]
     if category == "comedy":
         return [
-            ("Hook", "Open on an instantly recognizable everyday situation using original characters and a strong visual reaction."),
-            ("Setup", "Show the relatable problem clearly with natural comedic timing."),
-            ("Twist", "Deliver an original unexpected visual gag; no copied meme, skit, or borrowed footage."),
-            ("Punchline", "Hold the final reaction briefly for the payoff; clean end frame."),
+            ("Cold open", "Open mid-action on a relatable awkward moment with a clear expressive reaction."),
+            ("Escalation", "Show the situation getting more complicated through a different action and tighter shot."),
+            ("Twist", "Use a contrasting visual beat that sets up an unexpected punchline."),
+            ("Payoff", "Land on the strongest reaction or consequence; give the joke a short beat to breathe."),
         ]
     if category == "entertainment":
         return [
-            ("Hook", "Use a bold original visual that quickly introduces the entertainment topic or trend."),
-            ("Context", "Show original or licensed visuals that establish the relevant facts."),
-            ("Commentary", "Give a concise original observation or reaction, not a re-upload of third-party clips."),
-            ("Close", "Finish with a clear takeaway and clean branded end frame."),
+            ("Cold open", "Lead with the most energetic relevant performance, crowd, or pop-culture visual."),
+            ("Build", "Show a contrasting angle or moment that raises the question."),
+            ("Reveal", "Use a clear visual that supports the original observation; do not imply footage depicts an event it does not."),
+            ("Payoff", "Finish on the most memorable relevant visual and a sharp takeaway."),
         ]
     return [
-        ("What happened", "Use a neutral original newsroom-style graphic with date and location; never present generated imagery as authentic event footage."),
-        ("Confirmed facts", "Show a clean timeline or map-style illustration; include only verified facts and label uncertainty."),
-        ("Why it matters", "Explain the significance with original graphics that separate confirmed facts from analysis."),
-        ("Sources and update", "Show source names and update time; include working source links in the description."),
+        ("What happened", "Use relevant verified event footage, date/location context, and no fabricated visuals."),
+        ("Confirmed facts", "Show a distinct angle or source-grounded visual that supports confirmed details."),
+        ("Why it matters", "Cut to a visual that explains real-world impact; separate fact from analysis."),
+        ("Latest status", "End with the newest verified development and source context."),
     ]
 
 
 def _narration(category: str, topic: str) -> str:
     if category == "ai_technology":
         return (
-            f"Here is a practical demonstration of {topic}. Start with the task, test the tool on a real example, "
-            "check the output, and compare it with your current workflow. Features and free-plan limits can change, "
-            "so verify them before relying on the tool. Subscribe to The Jowi Code. Thanks for watching."
+            f"Stop trusting an AI answer just because it sounds confident. Take {topic}: "
+            "give the tool one specific task, then ask it to list what it assumed. "
+            "Now verify the most important claim somewhere independent. That tiny extra step can expose "
+            "a polished mistake before it becomes your problem. AI is useful; blind trust is not. "
+            "Use the tool, challenge the answer, then decide. Subscribe to The Jowi Code. Thanks for watching."
         )
     if category == "comedy":
         return (
-            f"POV: {topic}. You had one simple job. Somehow it became a full operation, three excuses, "
-            "and a problem nobody remembers starting. And the funniest part? The solution was obvious from the beginning. "
+            f"You know when {topic.lower()}? It starts with, 'Relax, this will take two seconds.' "
+            "Cut to ten minutes later: everyone is involved, nobody knows the plan, and the original problem "
+            "has somehow become a group project. Then the one person who caused it says, 'So what's the issue?' "
+            "That's not confidence. That's a talent. Be honest—who in your group does this? "
             "Subscribe to The Jowi Code. Thanks for watching."
         )
     if category == "entertainment":
         return (
-            f"Here is the key detail about {topic}. What is confirmed, what is reaction, and what is still opinion? "
-            "The context matters more than repeating a trend. Follow The Jowi Code for original commentary. Thanks for watching."
+            f"Here's why {topic.lower()} can take over your feed so quickly. First, one moment is easy to copy. "
+            "Then everyone adds their own twist, so you see it everywhere without seeing the exact same thing. "
+            "But once the surprise disappears, people move on just as fast. The trick is spotting what made "
+            "the moment shareable—not just copying the trend after it's already everywhere. "
+            "What trend do you think is next? Follow The Jowi Code. Thanks for watching."
         )
     return (
-        f"Here is the latest verified update on {topic}. We are separating confirmed information from details that are still developing. "
-        "Check the source links in the description for original statements and further updates. If key facts change, this update should be corrected. "
-        "Subscribe to The Jowi Code for clear, sourced updates. Thanks for watching."
+        f"Here is the latest verified update on {topic}. First, what sources confirm; second, what remains "
+        "unclear; and third, why it matters. We will not fill gaps with guesses. Check the source links in "
+        "the description for original reporting and later corrections. Subscribe to The Jowi Code for clear, "
+        "sourced updates. Thanks for watching."
     )
 
 
@@ -105,7 +113,7 @@ def build_short_plan(topic: str, category: str | None = None) -> dict:
         "presentation": policy.format,
         "title": clean_topic[:90],
         "topic": clean_topic,
-        "voice": "Deep male voiceover; clear, natural delivery; no on-screen captions, subtitles, or text anywhere in the final video.",
+        "voice": "Deep male voiceover; energetic, conversational delivery with deliberate pauses; no on-screen captions, subtitles, or text anywhere in the final video.",
         "narration": _narration(selected, clean_topic),
         "scenes": scenes,
         "generation_status": "plan_only_provider_not_configured",
