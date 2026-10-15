@@ -3,44 +3,37 @@
 A phone-managed automation system for **The Jowi Code** YouTube channel.
 
 ## Channel strategy
-- Regular Shorts target: 2–3 per day, with candidate time slots by category.
-- International breaking news is event-driven and intended to be monitored continuously; no fixed news upload quota, but duplicate/materiality checks and source verification are required.
+- Regular Shorts target: 2–3 per day across comedy, entertainment, AI/technology, money/success, and psychology.
+- International news monitoring is event-driven and configured to poll every 30 minutes; there is no daily news candidate quota.
 - AI and technology: practical demos and useful explainers.
 - Comedy: original visual gags and relatable situations.
 - Entertainment: original commentary and trend explainers, not re-uploads.
-- Money and success + psychology and human behaviour: preserve the Jowi lion and storytelling format.
-- Candidate schedule and safety rules: see `docs/CHANNEL_STRATEGY.md` and `backend/app/channel_strategy.py`.
-- **Important:** strategy config exists, but continuous news monitoring, scheduling, YouTube Analytics integration, category-aware script generation, and automatic performance adjustments are not yet implemented.
-
-## Brand
-- Photorealistic black anthropomorphic male lion, black suit, white shirt, gold tie, gold eyes, serious expression.
-- Vertical 9:16, deep male voiceover, no captions, no typing/snap/ether effects.
-- Tagline: “Master Your Mind. Build Your Future.” Close with subscribe / “Thanks for watching”.
-- Prefer $0 services and disclose reliability or quota limitations.
+- Money and success + psychology and human behaviour: Jowi lion storytelling.
+- Candidate schedule and policy: see `docs/CHANNEL_STRATEGY.md` and `backend/app/channel_strategy.py`.
 
 ## Artifact policy
 **No downloadable artifact should be uploaded or retained for every workflow run.** CI runs checks only and must not use `actions/upload-artifact`. Do not build an APK until readiness checks pass and a deliberate release is appropriate.
 
 ## Implemented foundation
 - FastAPI health endpoint and protected status endpoint.
-- Authenticated job enqueue/list API with a three-job daily limit (this cap still needs to be changed before news automation can run as designed).
-- SQLite local development queue and PostgreSQL support via `DATABASE_URL`.
-- Current generic script and four-scene prompt planner.
-- AI Horde image generation adapter with sequential submissions, bounded 429 retries honoring Retry-After, bounded polling, and cancellation on failure.
-- Offline Pillow-based branded illustrated scene fallback when the free volunteer image API is throttled or unavailable.
-- Optional Edge TTS voiceover endpoint.
-- FFmpeg vertical 9:16 renderer for four scene images and audio.
-- Private-draft pipeline and YouTube upload adapter that only requests private visibility.
-- Render Docker blueprint with auto-deploy disabled.
+- Authenticated job queue with three regular-content jobs per UTC day; corroborated news jobs are exempt from that daily cap and duplicate headlines are suppressed for 48 hours.
+- Category-aware original script and scene planning for all six editorial categories.
+- Conservative RSS news discovery across BBC World, The Guardian World, NPR World, and UN News.
+- News candidates require a similar headline from at least two different publishers, are deduplicated across matching headline clusters, and retain source URLs for source-aware private draft planning.
+- Scheduled GitHub Actions workflow polls feeds every 30 minutes and queues corroborated candidates. It requires the dedicated `JOWI_DATABASE_URL` secret and a successful scheduled run before monitoring can be considered active.
+- AI Horde image generation adapter with bounded retries and an illustrated local fallback.
+- Optional Edge TTS voiceover endpoint and FFmpeg vertical 9:16 renderer.
+- Private-only YouTube upload adapter. Public publishing remains disabled.
 
 ## Important limitations
-- AI Horde is a free volunteer service; anonymous requests are low-priority, may time out, and may share prompts/images. Character consistency is not guaranteed.
-- The GitHub Actions worker is manual-only and processes at most one queued job. It is not continuously scheduled.
-- The last successful run created a private draft. That verifies one manual pipeline run, not continuous scheduling or public publishing.
-- YouTube Analytics read access is not yet configured; automatic performance-based adjustments cannot be truthfully claimed until that integration is implemented and tested.
+- **The news monitor discovers and queues candidates; it does not automatically publish news.** Headline similarity across feeds is only a discovery safeguard, not proof that every factual claim is verified. The current deterministic news script does not yet generate a detailed, source-grounded summary of the reported facts, so news candidates must not be auto-published.
+- The monitor workflow requires `JOWI_DATABASE_URL` to be configured in GitHub Actions. Until a successful scheduled run is confirmed, do not assume continuous monitoring is running.
+- Automatic YouTube Analytics review and performance-led schedule/topic adjustments are not implemented yet.
+- The category-specific schedule values are initial test slots, not evidence-based optimal times.
+- AI Horde is a free volunteer service; anonymous requests are low-priority, may time out, and character consistency is not guaranteed.
+- The private worker remains manual-only for normal video jobs. A successful past run proved one video could be generated and uploaded privately, not that all category formats work end-to-end.
 - Hosted use needs a strong private `API_ACCESS_TOKEN` and durable `DATABASE_URL`; SQLite on an ephemeral web service is not suitable for production.
-- Public publishing remains disabled during validation. The current worker uploads private drafts only.
-- News automation must use original summaries, source corroboration, event deduplication, and original/licensed visuals; it must not copy article text or reuse unlicensed clips.
+- No workflow artifacts are uploaded. Public publishing is disabled.
 
 ## Local backend
 From `backend/`:
