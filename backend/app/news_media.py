@@ -6,6 +6,7 @@ reporting from at least two independent sources and relevant, openly licensed vi
 from __future__ import annotations
 
 from html.parser import HTMLParser
+from html import unescape
 from pathlib import Path
 import re
 import time
@@ -71,8 +72,18 @@ def _fetch_reporting(sources: list[dict], client: httpx.Client) -> tuple[list[st
         if not url.startswith("https://"):
             continue
         try:
-            response = client.get(url, headers={"User-Agent": USER_AGENT})
-            response.raise_for_status()
+            response = None
+            # Retry transient publisher timeouts/rate limits, without spending the whole
+            # job budget on one publisher. RSS summaries below are the fallback evidence.
+            for attempt in range(3):
+                try:
+                    response = client.get(url, headers={"User-Agent": USER_AGENT}, timeout=httpx.Timeout(18.0, connect=8.0))
+                    response.raise_for_status()
+                    break
+                except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
+                    if attempt == 2:
+                        raise exc
+                    time.sleep(1.0 + attempt * 1.5)
             parser = _ArticleText()
             parser.feed(response.text[:2_000_000])
             paragraphs = parser.paragraphs
@@ -88,6 +99,17 @@ def _fetch_reporting(sources: list[dict], client: httpx.Client) -> tuple[list[st
                         break
                 if len(selected) >= 3:
                     break
+            # RSS descriptions are publisher-authored reporting snippets. They are
+            # a useful fallback when the full article blocks bots or times out.
+            if len(selected) < 2:
+                summary = unescape(re.sub(r"<[^>]+>", " ", str(source.get("summary", ""))))
+                summary = " ".join(summary.split())
+                if len(summary) >= 100:
+                    for sentence in _sentences(summary):
+                        if len(sentence) <= 360 and sentence not in selected:
+                            selected.append(sentence)
+                        if len(selected) >= 3:
+                            break
             if selected:
                 evidence.extend(selected)
                 usable_sources.append({
