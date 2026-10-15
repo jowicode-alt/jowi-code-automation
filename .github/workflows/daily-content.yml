@@ -47,7 +47,8 @@ jobs:
       EVENT_SCHEDULE: ${{ github.event.schedule || '' }}
       MANUAL_CATEGORY: ${{ inputs.category || '' }}
       PUSH_TEST_MODE: ${{ github.event_name == 'push' && 'true' || 'false' }}
-      ALLOW_EXTRA_REGULAR_JOBS: ${{ github.event_name == 'push' && 'true' || 'false' }}
+      FORCE_PRIVATE_TEST: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && 'true' || 'false' }}
+      ALLOW_EXTRA_REGULAR_JOBS: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && 'true' || 'false' }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -140,7 +141,7 @@ jobs:
           now = datetime.now(timezone.utc)
           day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
           jobs = list_jobs(100)
-          force_test = os.getenv("PUSH_TEST_MODE", "").lower() == "true"
+          force_test = os.getenv("FORCE_PRIVATE_TEST", "").lower() == "true"
           active = [
               job for job in jobs
               if job.get("job_type") == category
