@@ -16,7 +16,7 @@ def _timestamp(seconds: float) -> str:
 
 def _write_captions(text: str, duration: float, directory: Path) -> Path:
     """Create evenly paced, wrapped SRT captions from the spoken narration."""
-    clean = re.sub(r"\\s+", " ", text).strip()
+    clean = re.sub(r"\s+", " ", text).strip()
     if not clean:
         clean = "The Jowi Code — Master Your Mind. Build Your Future."
     words = clean.split()
@@ -29,9 +29,8 @@ def _write_captions(text: str, duration: float, directory: Path) -> Path:
             current = []
     if current:
         chunks.append(" ".join(current))
-    # Break long lines at word boundaries; two lines maximum is preferred.
-    chunks = ["\\n".join(textwrap.wrap(chunk, width= thirty_eight())) for chunk in chunks]
-    weights = [max(1, len(re.sub(r"\\W", "", chunk))) for chunk in chunks]
+    chunks = ["\n".join(textwrap.wrap(chunk, width=38)) for chunk in chunks]
+    weights = [max(1, len(re.sub(r"\W", "", chunk))) for chunk in chunks]
     total_weight = sum(weights)
     cursor = 0.0
     entries = []
@@ -40,17 +39,12 @@ def _write_captions(text: str, duration: float, directory: Path) -> Path:
         entries.extend([str(index), f"{_timestamp(cursor)} --> {_timestamp(end)}", chunk, ""])
         cursor = end
     path = directory / "captions.srt"
-    path.write_text("\\n".join(entries), encoding="utf-8")
+    path.write_text("\n".join(entries), encoding="utf-8")
     return path
 
 
-def thirty_eight() -> int:
-    return 38
-
-
 def _caption_filter(srt_path: Path) -> str:
-    # Keep captions away from the screen edges and the YouTube Shorts UI.
-    escaped = str(srt_path).replace("\\", "/").replace(":", r"\\:").replace("'", r"\\'")
+    escaped = str(srt_path).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
     return (
         f"subtitles='{escaped}':force_style="
         "'FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,"
@@ -101,7 +95,6 @@ def render_short(scene_images: list[str], audio_path: str, output_path: str, nar
         command += ["-i", str(audio)]
         filters = []
         for index in range(len(images)):
-            # Fit entire source frame inside 9:16; pad instead of zoom-cropping edge content.
             filters.append(
                 f"[{index}:v]scale=1080:1920:force_original_aspect_ratio=decrease,"
                 f"pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,"
@@ -140,7 +133,6 @@ def render_news_short(video_clips: list[str], audio_path: str, output_path: str,
         command += ["-i", str(audio)]
         filters = []
         for index in range(len(clips)):
-            # Preserve the complete source frame; no center crop that cuts off edge text.
             filters.append(
                 f"[{index}:v]scale=1080:1920:force_original_aspect_ratio=decrease,"
                 f"pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,"
