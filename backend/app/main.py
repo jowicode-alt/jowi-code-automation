@@ -15,7 +15,10 @@ from app.jobs import enqueue_job, get_job, list_jobs
 from app.content import build_short_plan
 from app.voice import generate_voiceover
 
-app = FastAPI(title="The Jowi Code Automation API", version="0.5.0", description="Authenticated Shorts planning and job queue; YouTube uploads are private-only.")
+app = FastAPI(title="The Jowi Code Automation API", version="0.6.0", description="Authenticated category-aware Shorts planning and job queue; YouTube uploads remain private-only.")
+ALLOWED_CATEGORIES = "^(short_video|breaking_news|ai_technology|comedy|entertainment|money_success|psychology)$"
+
+
 class ServiceStatus(BaseModel):
     service: str
     state: str
@@ -31,17 +34,23 @@ class ServiceStatus(BaseModel):
     youtube_oauth_configured: bool
     timestamp_utc: str
 
+
 class JobRequest(BaseModel):
-    job_type: str = Field(default="short_video", pattern="^short_video$")
+    job_type: str = Field(default="money_success", pattern=ALLOWED_CATEGORIES)
     topic: str = Field(min_length=3, max_length=240)
 
+
 class PlanRequest(BaseModel):
+    category: str = Field(default="money_success", pattern="^(breaking_news|ai_technology|comedy|entertainment|money_success|psychology)$")
     topic: str = Field(min_length=3, max_length=240)
+
 
 class VoiceoverRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1800)
 
+
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/tmp/jowi-code-output"))
+
 
 def _database_status() -> tuple[str, bool, bool]:
     """Return backend, connectivity, durability without exposing connection details."""
@@ -63,9 +72,11 @@ def _database_status() -> tuple[str, bool, bool]:
     except Exception:
         return "sqlite_unavailable", False, False
 
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "jowi-code-automation-api"}
+
 
 @app.get("/api/status", response_model=ServiceStatus, dependencies=[Depends(require_api_token)])
 def status() -> ServiceStatus:
@@ -80,8 +91,6 @@ def status() -> ServiceStatus:
     oauth_configured = all(os.getenv(name, "").strip() for name in (
         "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"
     ))
-    # This means the required local media adapters/dependencies exist, not that a
-    # real provider run has succeeded. image_generation_mode exposes anonymous limits.
     media_components_available = image_adapter_available and ffmpeg_available and voiceover_available
     service_state = "ready" if (
         database_connected and media_components_available and oauth_configured
@@ -106,16 +115,20 @@ def status() -> ServiceStatus:
         timestamp_utc=datetime.now(timezone.utc).isoformat(),
     )
 
+
 @app.post("/api/jobs", status_code=202, dependencies=[Depends(require_api_token)])
 def create_job(request: JobRequest) -> dict:
     try:
-        return enqueue_job(request.job_type, request.topic)
+        job_type = "money_success" if request.job_type == "short_video" else request.job_type
+        return enqueue_job(job_type, request.topic)
     except ValueError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
+
 
 @app.get("/api/jobs", dependencies=[Depends(require_api_token)])
 def get_jobs() -> dict:
     return {"jobs": list_jobs()}
+
 
 @app.get("/api/jobs/{job_id}", dependencies=[Depends(require_api_token)])
 def get_job_detail(job_id: str) -> dict:
@@ -128,9 +141,11 @@ def get_job_detail(job_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
+
 @app.post("/api/scripts/plan", dependencies=[Depends(require_api_token)])
 def plan_script(request: PlanRequest) -> dict:
-    return build_short_plan(request.topic)
+    return build_short_plan(request.topic, category=request.category)
+
 
 @app.post("/api/voiceover", dependencies=[Depends(require_api_token)])
 async def create_voiceover(request: VoiceoverRequest) -> dict[str, str | int]:
@@ -142,6 +157,7 @@ async def create_voiceover(request: VoiceoverRequest) -> dict[str, str | int]:
         output_path.unlink(missing_ok=True)
         raise HTTPException(status_code=502, detail="Voice provider failed; no audio was created") from exc
     return {"audio_id": audio_id, "status": "ready", "bytes": output_path.stat().st_size, "voice": os.getenv("TTS_VOICE", "en-US-GuyNeural")}
+
 
 @app.get("/api/voiceover/{audio_id}", dependencies=[Depends(require_api_token)])
 def download_voiceover(audio_id: str) -> FileResponse:
