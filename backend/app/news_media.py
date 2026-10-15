@@ -446,3 +446,69 @@ def build_news_package(topic: str, sources: list[dict], output_dir: str) -> dict
             "sources": usable_sources,
             "footage_provider": "Wikimedia Commons",
         }
+
+
+def build_broll_package(topic: str, category: str, output_dir: str) -> dict:
+    """Fetch relevant, openly licensed moving B-roll for non-news Shorts.
+
+    If Commons cannot supply suitable video with a compatible licence, fail closed
+    rather than uploading static branded art or pretending it is live footage.
+    """
+    category_terms = {
+        "comedy": "everyday life people reaction funny situation",
+        "ai_technology": "computer technology artificial intelligence robotics",
+        "entertainment": "entertainment audience performance cinema music",
+    }
+    if category not in category_terms:
+        raise ValueError(f"Unsupported B-roll category: {category}")
+    search_topic = f"{topic} {category_terms[category]}"
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    with httpx.Client(timeout=httpx.Timeout(20.0, connect=8.0), follow_redirects=True) as client:
+        candidates = _video_results(search_topic, client)
+        if not candidates:
+            raise RuntimeError(
+                f"No relevant openly licensed moving footage passed validation for {category}; "
+                "no static fallback will be uploaded."
+            )
+        clips = []
+        attributions = []
+        for candidate in candidates:
+            if len(clips) >= 4:
+                break
+            try:
+                response = client.get(candidate["url"], headers={"User-Agent": USER_AGENT})
+                response.raise_for_status()
+                data = response.content
+                if not data or len(data) > MAX_VIDEO_BYTES:
+                    continue
+                suffix = Path(candidate["url"].split("?", 1)[0]).suffix.lower()
+                if suffix not in VIDEO_EXTENSIONS:
+                    continue
+                path = directory / f"broll-clip-{len(clips) + 1}{suffix}"
+                path.write_bytes(data)
+                if path.stat().st_size < 1024:
+                    path.unlink(missing_ok=True)
+                    continue
+                clips.append(str(path))
+                attributions.append({
+                    "title": candidate["title"],
+                    "creator": candidate["artist"],
+                    "license": candidate["license"],
+                    "source_url": candidate["page"],
+                })
+            except Exception as exc:
+                print(f"Licensed B-roll download failed: {type(exc).__name__}", flush=True)
+        if not clips:
+            raise RuntimeError(
+                f"No usable openly licensed moving footage could be downloaded for {category}; "
+                "no static fallback will be uploaded."
+            )
+        print(f"B-roll: prepared {len(clips)} licensed moving clips from Wikimedia Commons", flush=True)
+        return {
+            "narration": "",
+            "clips": clips,
+            "clip_attributions": attributions,
+            "sources": [],
+            "footage_provider": "Wikimedia Commons",
+        }
