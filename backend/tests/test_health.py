@@ -92,7 +92,7 @@ def test_script_planner_returns_brand_consistent_vertical_scenes(monkeypatch):
     assert plan["format"] == "YouTube Short, vertical 9:16"
     assert plan["tagline"] == "Master Your Mind. Build Your Future."
     assert len(plan["scenes"]) == 4
-    assert "black male lion" in plan["scenes"][0]["visual_prompt"]
+    assert "black male lion" not in plan["scenes"][0]["visual_prompt"]
     assert "no on-screen captions" in plan["voice"]
     assert plan["publishing_enabled"] is False
 
