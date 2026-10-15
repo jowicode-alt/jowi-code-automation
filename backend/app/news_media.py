@@ -252,7 +252,7 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
     """
     stop_words = {
         "about", "after", "amid", "among", "around", "before", "being", "between",
-        "breaking", "could", "during", "from", "have", "into", "latest", "near",
+        "breaking", "city", "could", "during", "from", "have", "into", "latest", "near",
         "over", "says", "that", "their", "there", "these", "this", "today", "update",
         "what", "when", "where", "which", "while", "with", "would", "your", "news",
         "video", "footage", "report", "reports",
