@@ -104,9 +104,15 @@ def run_once(category_filter: str | None = None) -> dict:
 
         from app.pipeline import build_private_draft
         print("Worker: generating voiceover and rendering the video", flush=True)
-        pipeline_result = asyncio.run(
-            build_private_draft(job["topic"], images, category=category, news_package=news_package)
-        )
+        if news_package:
+            pipeline_result = asyncio.run(
+                build_private_draft(job["topic"], images, category=category, news_package=news_package)
+            )
+        else:
+            # Keep the existing call shape for non-news jobs and their compatibility tests.
+            pipeline_result = asyncio.run(
+                build_private_draft(job["topic"], images, category=category)
+            )
         if (
             pipeline_result.get("status") != "uploaded_private"
             or pipeline_result.get("privacy_status") != "private"
