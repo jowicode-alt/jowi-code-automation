@@ -25,6 +25,7 @@ class _FakeHorde:
             "The reports explain what happened, while several important details remain unconfirmed. "
             "The information available now may change as more reliable reporting becomes available. "
             "People should consult the original sources before drawing conclusions about the situation. "
+            "Further updates should be checked directly with the reporting organizations. "
             "Subscribe to The Jowi Code for clear, sourced news. Thanks for watching."
         )
         return _Response({"generations": [{"text": narration}]})
