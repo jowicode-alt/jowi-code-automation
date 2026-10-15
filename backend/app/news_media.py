@@ -324,7 +324,7 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
             or "non-commercial" in license_lower
             or "no derivatives" in license_lower
             or "noderivatives" in license_lower
-            or bool(re.search(r"(?:^|[-\\s])(?:nc|nd)(?:[-\\s]|$)", license_lower))
+            or bool(re.search(r"(?:^|[-\s])(?:nc|nd)(?:[-\s]|$)", license_lower))
         )
         if not license_name or restricted_license:
             continue
