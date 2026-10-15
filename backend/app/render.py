@@ -1,84 +1,7 @@
-"""Render vertical Shorts with safe framing and burned-in, readable captions."""
+"""Render vertical Shorts with safe framing and no on-screen captions."""
 from pathlib import Path
-import re
 import subprocess
 import tempfile
-import textwrap
-
-
-def _timestamp(seconds: float) -> str:
-    milliseconds = max(0, int(seconds * 1000))
-    hours, remainder = divmod(milliseconds, 3_600_000)
-    minutes, remainder = divmod(remainder, 60_000)
-    secs, millis = divmod(remainder, 1000)
-    return f"{hours:02}:{minutes:02}:{secs:02},{millis:03}"
-
-
-def _write_captions(text: str, duration: float, directory: Path, word_boundaries: list[dict] | None = None) -> Path:
-    """Write compact captions aligned to actual TTS word timings where available."""
-    path = directory / "captions.srt"
-    entries = []
-    timed_words = []
-    for item in word_boundaries or []:
-        word = str(item.get("text", "")).strip()
-        if not word:
-            continue
-        offset = int(item.get("offset", 0))
-        length = int(item.get("duration", 0))
-        start = max(0.0, offset / 10_000_000)
-        finish = min(duration, max(start + 0.08, (offset + length) / 10_000_000))
-        timed_words.append((word, start, finish))
-
-    if timed_words:
-        groups, group = [], []
-        for item in timed_words:
-            proposed = " ".join([part[0] for part in group] + [item[0]])
-            if group and (len(group) >= 5 or len(proposed) > 30 or item[1] - group[0][1] > 2.8):
-                groups.append(group)
-                group = []
-            group.append(item)
-        if group:
-            groups.append(group)
-        for index, group in enumerate(groups, start=1):
-            phrase = " ".join(part[0] for part in group)
-            start_time = max(0.0, group[0][1] - 0.04)
-            end_time = min(duration, max(group[-1][2] + 0.12, start_time + 0.35))
-            if index < len(groups):
-                end_time = min(end_time, max(start_time + 0.2, groups[index][0][1] - 0.02))
-            entries.extend([str(index), f"{_timestamp(start_time)} --> {_timestamp(end_time)}", phrase, ""])
-    else:
-        # Fallback when the speech provider does not expose word boundaries.
-        clean = re.sub(r"\s+", " ", text).strip()
-        words = clean.split()
-        chunks, current = [], []
-        for word in words:
-            proposed = " ".join(current + [word])
-            if current and (len(current) >= 5 or len(proposed) > 30):
-                chunks.append(" ".join(current))
-                current = []
-            current.append(word)
-        if current:
-            chunks.append(" ".join(current))
-        weights = [max(1, len(re.sub(r"\W", "", chunk))) for chunk in chunks]
-        total_weight = sum(weights) or 1
-        cursor = 0.0
-        for index, (chunk, weight) in enumerate(zip(chunks, weights), start=1):
-            finish = duration if index == len(chunks) else cursor + duration * weight / total_weight
-            entries.extend([str(index), f"{_timestamp(cursor)} --> {_timestamp(finish)}", chunk, ""])
-            cursor = finish
-
-    path.write_text("\n".join(entries), encoding="utf-8")
-    return path
-
-def _caption_filter(srt_path: Path) -> str:
-    escaped = str(srt_path).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
-    return (
-        f"subtitles='{escaped}':force_style="
-        "'FontName=Arial,FontSize=27,PrimaryColour=&H00FFFFFF,"
-        "OutlineColour=&H00101010,BorderStyle=1,Outline=2,Shadow=1,"
-        "Alignment=5,MarginL=140,MarginR=140,MarginV=0,"
-        "WrapStyle=2,Bold=0'"
-    )
 
 
 def _probe_duration(audio: Path) -> float:
@@ -101,7 +24,7 @@ def _render(command: list[str], target: Path, timeout: int = 240) -> str:
 
 
 def render_short(scene_images: list[str], audio_path: str, output_path: str, narration: str = "", word_boundaries: list[dict] | None = None) -> str:
-    """Render four scene images without cropping their edges, with on-screen captions."""
+    """Render four scene images with voiceover, without captions or subtitles."""
     if len(scene_images) != 4:
         raise ValueError("A Jowi Code Short requires exactly four scene images")
     images = [Path(item) for item in scene_images]
@@ -114,8 +37,7 @@ def render_short(scene_images: list[str], audio_path: str, output_path: str, nar
     target.parent.mkdir(parents=True, exist_ok=True)
     duration = _probe_duration(audio)
     scene_duration = duration / len(images)
-    with tempfile.TemporaryDirectory(prefix="jowi-captions-") as temp:
-        srt = _write_captions(narration, duration, Path(temp), word_boundaries)
+    with tempfile.TemporaryDirectory(prefix="jowi-scenes-") as temp:
         command = ["ffmpeg", "-y"]
         for image in images:
             command += ["-loop", "1", "-framerate", "30", "-t", f"{scene_duration:.3f}", "-i", str(image)]
@@ -128,8 +50,7 @@ def render_short(scene_images: list[str], audio_path: str, output_path: str, nar
                 f"fps=30,format=yuv420p[v{index}]"
             )
         joined = "".join(f"[v{index}]" for index in range(len(images)))
-        filters.append(f"{joined}concat=n={len(images)}:v=1:a=0[vconcat]")
-        filters.append(f"[vconcat]{_caption_filter(srt)}[vout]")
+        filters.append(f"{joined}concat=n={len(images)}:v=1:a=0[vout]")
         command += [
             "-filter_complex", ";".join(filters), "-map", "[vout]", "-map", f"{len(images)}:a:0",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac",
@@ -139,7 +60,7 @@ def render_short(scene_images: list[str], audio_path: str, output_path: str, nar
 
 
 def render_news_short(video_clips: list[str], audio_path: str, output_path: str, narration: str = "", word_boundaries: list[dict] | None = None) -> str:
-    """Render a 9:16 news Short with licensed moving footage, safe framing, and captions."""
+    """Render a 9:16 news Short with licensed moving footage and voiceover, no captions."""
     if not video_clips:
         raise ValueError("At least one licensed moving news clip is required")
     clips = [Path(item) for item in video_clips]
@@ -152,8 +73,7 @@ def render_news_short(video_clips: list[str], audio_path: str, output_path: str,
     target.parent.mkdir(parents=True, exist_ok=True)
     duration = _probe_duration(audio)
     scene_duration = duration / len(clips)
-    with tempfile.TemporaryDirectory(prefix="jowi-news-captions-") as temp:
-        srt = _write_captions(narration, duration, Path(temp))
+    with tempfile.TemporaryDirectory(prefix="jowi-news-scenes-") as temp:
         command = ["ffmpeg", "-y"]
         for clip in clips:
             command += ["-stream_loop", "-1", "-i", str(clip)]
@@ -166,8 +86,7 @@ def render_news_short(video_clips: list[str], audio_path: str, output_path: str,
                 f"trim=duration={scene_duration:.3f},setpts=PTS-STARTPTS,format=yuv420p[v{index}]"
             )
         joined = "".join(f"[v{index}]" for index in range(len(clips)))
-        filters.append(f"{joined}concat=n={len(clips)}:v=1:a=0[vconcat]")
-        filters.append(f"[vconcat]{_caption_filter(srt)}[vout]")
+        filters.append(f"{joined}concat=n={len(clips)}:v=1:a=0[vout]")
         command += [
             "-filter_complex", ";".join(filters), "-map", "[vout]", "-map", f"{len(clips)}:a:0",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "24", "-c:a", "aac",
