@@ -122,6 +122,40 @@ def _fetch_reporting(sources: list[dict], client: httpx.Client) -> tuple[list[st
     return evidence, usable_sources
 
 
+def _fallback_script(topic: str, sources: list[dict]) -> str:
+    """Build a conservative, source-attributed script when hosted generation is unavailable.
+
+    This avoids inventing details and avoids long verbatim excerpts: use at most one
+    short excerpt from each of two publishers, clearly attributed, with neutral framing.
+    """
+    excerpts = []
+    for source in sources:
+        facts = source.get("facts") or []
+        if not facts:
+            continue
+        # Keep each publisher's excerpt short; the rest is original neutral narration.
+        excerpt = " ".join(str(facts[0]).split())
+        words = excerpt.split()
+        if len(words) > 20:
+            excerpt = " ".join(words[:20]).rstrip(" ,;:") + "…"
+        excerpts.append((str(source.get("source", "a news publisher")), excerpt))
+        if len(excerpts) == 2:
+            break
+    if len(excerpts) < 2:
+        raise RuntimeError("Fallback news narration requires two independent reporting sources")
+    return (
+        f"Here is a developing news update about {topic}. "
+        f"{excerpts[0][0]} reports: “{excerpts[0][1]}” "
+        f"A separate report from {excerpts[1][0]} provides another account: “{excerpts[1][1]}” "
+        "These are short excerpts from the linked reporting, not a complete account of the event. "
+        "The available reports should be read in context, and details may change as journalists "
+        "publish corrections or additional confirmed information. We are not adding unverified claims "
+        "or guessing about causes, responsibility, or what may happen next. Check both original reports "
+        "in the video description for the full context and any later updates. "
+        "Subscribe to The Jowi Code for clear, sourced news. Thanks for watching."
+    )
+
+
 def _script(topic: str, sources: list[dict], facts: list[str], client: httpx.Client) -> str:
     """Ask the free AI Horde text-generation pool for an original, evidence-bounded script."""
     if len(facts) < 3 or len(sources) < 2:
@@ -176,10 +210,12 @@ def _script(topic: str, sources: list[dict], facts: list[str], client: httpx.Cli
         headers = {**headers, "apikey": "0000000000"}
         response = client.post(f"{base_url}/v2/generate/text/async", headers=headers, json=payload)
     if response.status_code in {401, 403}:
-        raise RuntimeError(
+        print(
             f"AI Horde denied text generation (HTTP {response.status_code}); "
-            "the configured key may be invalid/restricted, or anonymous access may be blocked."
+            "using conservative source-attributed narration fallback.",
+            flush=True,
         )
+        return _fallback_script(topic, sources)
     response.raise_for_status()
     request_id = response.json().get("id")
     if not request_id:
