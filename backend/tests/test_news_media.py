@@ -1,4 +1,6 @@
-from app.news_media import _ArticleText, _script
+import pytest
+
+from app.news_media import COMMONS_API, USER_AGENT, _ArticleText, _script, _video_results
 
 
 class _Response:
@@ -99,3 +101,44 @@ def test_news_script_uses_sourced_fallback_if_both_horde_keys_are_forbidden(monk
     assert "The Jowi Code" in narration
     assert "Thanks for watching" in narration
     assert horde.keys == ["configured-key", "0000000000"]
+
+
+
+class _CommonsResponse:
+    def __init__(self, status_code=200):
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            import httpx
+            request = httpx.Request("GET", COMMONS_API)
+            response = httpx.Response(self.status_code, request=request)
+            raise httpx.HTTPStatusError("forbidden", request=request, response=response)
+
+    def json(self):
+        return {"query": {"pages": {}}}
+
+
+class _CommonsClient:
+    def __init__(self, status_code=200):
+        self.status_code = status_code
+        self.headers = None
+
+    def get(self, url, **kwargs):
+        assert url == COMMONS_API
+        self.headers = kwargs.get("headers", {})
+        return _CommonsResponse(self.status_code)
+
+
+def test_commons_request_uses_descriptive_user_agent_with_contact_url():
+    client = _CommonsClient()
+    assert _video_results("ships near strait", client) == []
+    assert client.headers["User-Agent"] == USER_AGENT
+    assert "https://github.com/jowicode-alt/jowi-code-automation" in USER_AGENT
+    assert "contact channel owner" not in USER_AGENT
+
+
+def test_commons_403_is_reported_without_bypassing_access_denial():
+    client = _CommonsClient(status_code=403)
+    with pytest.raises(RuntimeError, match="Wikimedia Commons denied the API request"):
+        _video_results("ships near strait", client)
