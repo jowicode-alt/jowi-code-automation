@@ -93,7 +93,7 @@ jobs:
                   f"found {job['status']!r}."
               )
           category = os.environ.get("JOB_CATEGORY_INPUT", "all")
-          job_type = job.get("job_type", job.get("job_type", ""))
+          job_type = job.get("job_type", "")
           is_known_test_job = job_id == "4679ab92-9fcb-45f7-8aa2-0e5ccebe00b2"
           is_selected_news_job = category == "breaking_news" and job_type == "breaking_news"
           if not (is_known_test_job or is_selected_news_job):
