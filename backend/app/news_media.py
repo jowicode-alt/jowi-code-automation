@@ -264,15 +264,40 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
     if not topic_terms:
         return []
 
+    # News headlines often use different words from Commons captions. Expand only
+    # well-grounded event vocabulary; candidates still need relevant metadata and
+    # a verified compatible licence before they can be used.
+    synonym_groups = (
+        {"president", "presidential", "leader", "official", "officials", "speech", "address", "press", "conference"},
+        {"election", "vote", "voting", "ballot", "campaign", "candidate", "polling"},
+        {"protest", "protests", "demonstration", "demonstrations", "rally", "march"},
+        {"war", "conflict", "battle", "military", "army", "soldier", "soldiers", "troops", "attack", "airstrike"},
+        {"earthquake", "quake", "disaster", "rescue", "emergency", "damage", "flood", "flooding", "landslide"},
+        {"fire", "wildfire", "blaze", "smoke", "evacuation"},
+        {"storm", "hurricane", "cyclone", "typhoon", "weather", "rainfall"},
+        {"economy", "economic", "inflation", "market", "markets", "finance", "financial", "currency"},
+        {"technology", "tech", "artificial", "intelligence", "robot", "robotics", "cyber", "internet"},
+        {"football", "soccer", "match", "tournament", "championship", "athlete", "sport", "sports"},
+        {"court", "judge", "trial", "lawsuit", "justice", "law"},
+    )
+    expanded_terms = list(topic_terms)
+    for group in synonym_groups:
+        if set(topic_terms) & group:
+            for term in sorted(group):
+                if term not in expanded_terms and term not in stop_words:
+                    expanded_terms.append(term)
+
     # Use bounded, serial requests to be kind to Commons' shared API.
     queries = []
-    clean_topic = " ".join(re.findall(r"[\w-]+", topic))[:120].strip()
+    clean_topic = " ".join(re.findall(r"[\\w-]+", topic))[:120].strip()
     if clean_topic:
         queries.append(clean_topic)
     if len(topic_terms) >= 2:
         queries.append(" ".join(topic_terms[:4]))
         queries.append(" ".join(topic_terms[:2]))
     queries.extend(topic_terms[:4])
+    if expanded_terms != topic_terms:
+        queries.append(" ".join(expanded_terms[len(topic_terms):len(topic_terms) + 2]))
     unique_queries = []
     for query in queries:
         if query and query.casefold() not in {q.casefold() for q in unique_queries}:
@@ -336,7 +361,7 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
         description = " ".join(unescape(description).split())
         title_terms = set(re.findall(r"[a-z0-9]{3,}", title.lower()))
         description_terms = set(re.findall(r"[a-z0-9]{3,}", description.lower()))
-        matched_terms = set(topic_terms) & (title_terms | description_terms)
+        matched_terms = set(expanded_terms) & (title_terms | description_terms)
         if not matched_terms:
             continue
         try:
@@ -346,7 +371,7 @@ def _video_results(topic: str, client: httpx.Client) -> list[dict]:
         if size <= 0 or size > MAX_VIDEO_BYTES:
             continue
         # Rank files by topic overlap, preferring specific matches over generic B-roll.
-        score = len(set(topic_terms) & title_terms) * 3 + len(set(topic_terms) & description_terms)
+        score = len(set(expanded_terms) & title_terms) * 3 + len(set(expanded_terms) & description_terms)
         results.append({
             "title": title,
             "url": url,
