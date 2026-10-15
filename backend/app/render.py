@@ -47,9 +47,9 @@ def _caption_filter(srt_path: Path) -> str:
     escaped = str(srt_path).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
     return (
         f"subtitles='{escaped}':force_style="
-        "'FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,"
+        "'FontName=Arial,FontSize=42,PrimaryColour=&H00FFFFFF,"
         "OutlineColour=&H00101010,BorderStyle=1,Outline=3,Shadow=1,"
-        "Alignment=2,MarginL=100,MarginR=100,MarginV=300,"
+        "Alignment=2,MarginL=90,MarginR=90,MarginV=260,"
         "WrapStyle=2,Bold=1'"
     )
 
