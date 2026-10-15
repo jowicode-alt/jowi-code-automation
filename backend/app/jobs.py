@@ -112,15 +112,19 @@ def enqueue_job(job_type: str, topic: str) -> dict:
                     "deduplicated": True,
                 }
         else:
-            count = db.execute(
-                _query(
-                    "SELECT COUNT(*) FROM jobs WHERE created_at_utc >= ? AND job_type != ?",
-                    is_postgres,
-                ),
-                (day_start, "breaking_news"),
-            ).fetchone()[0]
-            if count >= 3:
-                raise ValueError("Daily regular-content job limit reached (maximum 3 jobs per UTC day)")
+            # Explicit one-off private video tests may exceed the daily regular-job cap.
+            # This override is set only by the dedicated GitHub Actions test-trigger path.
+            force_private_test = os.getenv("ALLOW_EXTRA_REGULAR_JOBS", "").lower() == "true"
+            if not force_private_test:
+                count = db.execute(
+                    _query(
+                        "SELECT COUNT(*) FROM jobs WHERE created_at_utc >= ? AND job_type != ?",
+                        is_postgres,
+                    ),
+                    (day_start, "breaking_news"),
+                ).fetchone()[0]
+                if count >= 3:
+                    raise ValueError("Daily regular-content job limit reached (maximum 3 jobs per UTC day)")
         db.execute(
             _query("INSERT INTO jobs (id, job_type, topic, status, created_at_utc, updated_at_utc, error, result_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", is_postgres),
             (job_id, job_type, topic.strip(), "queued", now, now, None, None),
