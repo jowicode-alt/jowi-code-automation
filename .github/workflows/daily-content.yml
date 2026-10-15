@@ -6,6 +6,9 @@ on:
     - cron: "30 9 * * *"
     - cron: "0 12 * * *"
     - cron: "0 15 * * *"
+  push:
+    paths:
+      - ".github/video-test-trigger"
   workflow_dispatch:
     inputs:
       category:
@@ -43,6 +46,8 @@ jobs:
       TTS_PITCH: -8Hz
       EVENT_SCHEDULE: ${{ github.event.schedule || '' }}
       MANUAL_CATEGORY: ${{ inputs.category || '' }}
+      PUSH_TEST_MODE: ${{ github.event_name == 'push' && 'true' || 'false' }}
+      ALLOW_EXTRA_REGULAR_JOBS: ${{ github.event_name == 'push' && 'true' || 'false' }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -75,6 +80,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "${PUSH_TEST_MODE:-false}" == "true" ]]; then
+            CATEGORY="$(tr -d '[:space:]' < ../.github/video-test-trigger)"
+            case "$CATEGORY" in
+              comedy|ai_technology|entertainment) ;;
+              *) echo "::error::Invalid private video test category in .github/video-test-trigger."; exit 1 ;;
+            esac
+          else
           case "${MANUAL_CATEGORY:-}" in
             comedy|ai_technology|entertainment) CATEGORY="$MANUAL_CATEGORY" ;;
             "")
@@ -87,6 +99,7 @@ jobs:
               ;;
             *) echo "::error::Unsupported category."; exit 1 ;;
           esac
+          fi
           export CATEGORY
           python - <<'PY'
           import os
@@ -127,13 +140,14 @@ jobs:
           now = datetime.now(timezone.utc)
           day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
           jobs = list_jobs(100)
+          force_test = os.getenv("PUSH_TEST_MODE", "").lower() == "true"
           active = [
               job for job in jobs
               if job.get("job_type") == category
               and job.get("status") in {"queued", "running"}
           ]
 
-          if active:
+          if active and not force_test:
               print(f"Reusing existing {category} job {active[0]['id']}: {active[0]['topic']}")
           else:
               todays_regular = []
@@ -150,7 +164,12 @@ jobs:
                   if job.get("job_type") == category
               ]
 
-              if todays_category:
+              if force_test:
+                  topic_index = (now.hour * 60 + now.minute + now.second) % len(topics[category])
+                  topic = topics[category][topic_index]
+                  job = enqueue_job(category, topic)
+                  print(f"FORCED PRIVATE TEST: queued fresh {category} job {job['id']}: {job['topic']}")
+              elif todays_category:
                   print(
                       f"SKIP_PRIVATE_WORKER=true: {category} already has a job today "
                       f"({todays_category[0]['status']}); preventing a duplicate daily upload."
